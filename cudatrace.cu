@@ -30,11 +30,11 @@
 /* find the appropriate way to define explicitly sized types */
 #if (__STDC_VERSION__ >= 199900) || defined(__GLIBC__)	/* C99 or GNU libc */
 #include <stdint.h>
-#elif defined(__unix__) || defined(unix)
+#elif defined(__unix__) || defined(unix) || defined(__MACH__)
 #include <sys/types.h>
 #elif defined(_MSC_VER)	/* the nameless one */
 typedef unsigned __int8 uint8_t;
-typedef unsigned __int32 uint32_t;
+typedef unsigned __int32 u_int32_t;
 #endif
 
 struct vec3 {
@@ -68,7 +68,7 @@ struct camera {
 	double fov;
 };
 
-void render(int xsz, int ysz, uint32_t *fb, int samples);
+void render(int xsz, int ysz, u_int32_t *fb, int samples);
 struct vec3 trace(struct ray ray, int depth);
 struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth);
 struct vec3 reflect(struct vec3 v, struct vec3 n);
@@ -137,7 +137,7 @@ const char *usage = {
 int main(int argc, char **argv) {
 	int i;
 	unsigned long rend_time, start_time;
-	uint32_t *pixels;
+	u_int32_t *pixels;
 	int rays_per_pixel = 1;
 	FILE *infile = stdin, *outfile = stdout;
 
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	if(!(pixels = malloc(xres * yres * sizeof *pixels))) {
+	if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof *pixels))) {
 		perror("pixel buffer allocation failed");
 		return EXIT_FAILURE;
 	}
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
 }
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-void render(int xsz, int ysz, uint32_t *fb, int samples) {
+void render(int xsz, int ysz, u_int32_t *fb, int samples) {
 	int i, j, s;
 	double rcp_samples = 1.0 / (double)samples;
 
@@ -251,32 +251,35 @@ void render(int xsz, int ysz, uint32_t *fb, int samples) {
 			g = g * rcp_samples;
 			b = b * rcp_samples;
 				
-			*fb++ = ((uint32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
-					((uint32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-					((uint32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+			*fb++ = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
+					((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+					((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 		}
 	}
 }
 
-__global__ void render_on_device(int xsz, int ysz, uint32_t *fb, int samples) {
+__global__ void render_on_device(int xsz, int ysz, u_int32_t *fb, int samples) {
+    int i, j, s;
+    double rcp_samples = 1.0/(double)samples;
     int idxx = blockIdx.x * blockDim.x + threadIdx.x;
     int idxy = blockIdx.y * blockDim.y + threadIdx.y;
     if (idxy < ysz) {
         if (idxx < xsz) {
+            double r, g, b;
             r = g = b = 0.0;
             for (s=0; s<samples; s++) {
                 struct vec3 col = trace(get_primary_ray(i,j,s), 0);
-                r += col.x
-                g += col.y
-                b += col.z
+                r += col.x;
+                g += col.y;
+                b += col.z;
             }
             r = r * rcp_samples;
             g = g * rcp_samples;
             b = b * rcp_samples;
             
-			*fb++ = ((uint32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
-					((uint32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-					((uint32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+			*fb++ = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
+					((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+					((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
         }
     }
 }
@@ -520,7 +523,7 @@ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoint *sp) {
 void load_scene(FILE *fp) {
 	char line[256], *ptr, type;
 
-	obj_list = malloc(sizeof(struct sphere));
+	obj_list = (sphere *)malloc(sizeof(struct sphere));
 	obj_list->next = 0;
 	
 	while((ptr = fgets(line, 256, fp))) {
@@ -566,7 +569,7 @@ void load_scene(FILE *fp) {
 		refl = atof(ptr);
 
 		if(type == 's') {
-			struct sphere *sph = malloc(sizeof *sph);
+			struct sphere *sph = (sphere *)malloc(sizeof *sph);
 			sph->next = obj_list->next;
 			obj_list->next = sph;
 
@@ -583,7 +586,7 @@ void load_scene(FILE *fp) {
 
 
 /* provide a millisecond-resolution timer for each system */
-#if defined(__unix__) || defined(unix)
+#if defined(__unix__) || defined(unix) || defined(__MACH__)
 #include <time.h>
 #include <sys/time.h>
 unsigned long get_msec(void) {
