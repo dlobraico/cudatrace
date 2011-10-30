@@ -258,6 +258,29 @@ void render(int xsz, int ysz, uint32_t *fb, int samples) {
 	}
 }
 
+__global__ void render_on_device(int xsz, int ysz, uint32_t *fb, int samples) {
+    int idxx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idxy = blockIdx.y * blockDim.y + threadIdx.y;
+    if (idxy < ysz) {
+        if (idxx < xsz) {
+            r = g = b = 0.0;
+            for (s=0; s<samples; s++) {
+                struct vec3 col = trace(get_primary_ray(i,j,s), 0);
+                r += col.x
+                g += col.y
+                b += col.z
+            }
+            r = r * rcp_samples;
+            g = g * rcp_samples;
+            b = b * rcp_samples;
+            
+			*fb++ = ((uint32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
+					((uint32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+					((uint32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+        }
+    }
+}
+
 /* trace a ray throught the scene recursively (the recursion happens through
  * shade() to calculate reflection rays if necessary).
  */
