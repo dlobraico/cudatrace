@@ -1,3 +1,7 @@
+NOTES
+=====
+(use this file to note any strange things worth keeping tabs on)
+
 Had to change all references of uint32_t to u_int32_t to compile on a Mac
 see: http://naranja.umh.es/~atg/blog/archives/2007/01/entry_5.html
 
