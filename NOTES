@@ -1,0 +1,4 @@
+Had to change all references of uint32_t to u_int32_t to compile on a Mac
+see: http://naranja.umh.es/~atg/blog/archives/2007/01/entry_5.html
+
+added defined(__MACH__) to the defined(unix) lines to include Macs in the conditionals
