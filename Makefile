@@ -5,11 +5,8 @@ src = cudatrace.cu
 CC = nvcc
 CFLAGS = -g -G -O0 -arch sm_23 -lm -lpthread
 
-$(obj): $(src)
-	$(CC) -o $(obj) $(src) 
-
-$(bin): $(obj)
-	$(CC) -o $@ $(obj) -lm -lpthread
+$(bin): $(src)
+	$(CC) -o $@ $(src) $(CFLAGS)
 
 .PHONY: clean
 clean:
