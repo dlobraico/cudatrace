@@ -1,8 +1,12 @@
 obj = cudatrace.o
 bin = cudatrace
+src = cudatrace.cu
 
 CC = nvcc
-CFLAGS = -O3 
+CFLAGS = -g -G -O0 -arch sm_23 -lm -lpthread
+
+$(obj): $(src)
+	$(CC) -o $(obj) $(src) 
 
 $(bin): $(obj)
 	$(CC) -o $@ $(obj) -lm -lpthread
