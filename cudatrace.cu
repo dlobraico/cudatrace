@@ -732,6 +732,8 @@ __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoin
 void load_scene(FILE *fp) {
     char line[256], *ptr, type;
 
+    struct sphere *obj_listdev = 0;
+
     cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)));
     obj_list = (sphere *)malloc(sizeof(struct sphere));
 
