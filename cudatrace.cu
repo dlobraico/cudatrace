@@ -446,9 +446,9 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
     int xsz = pixelsPerCore[index].end[0];   //x value of last pixel
     int ysz = pixelsPerCore[index].end[1];   //y value of last pixel
     int raysTraced = 0;                     // number of rays traced 
-    int isReflect[0];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
+    int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
     isReflect[0] = 0;
-    struct reflectdata RData[0];           //ARRAY WHICH CONTAINS REFLECT DATA STRUCT TO BE PASSED ON TO TRACE FUNCTION
+    struct reflectdata RData[1];           //ARRAY WHICH CONTAINS REFLECT DATA STRUCT TO BE PASSED ON TO TRACE FUNCTION
     
     double rcp_samples = 1.0 / (double)samples;
 
