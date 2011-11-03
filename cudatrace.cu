@@ -143,7 +143,7 @@ int irand[NRAN];
 __device__ int xresdev = 800;
 __device__ int yresdev = 600;
 __device__ double aspectdev = 1.333333;
-__device__ struct sphere *obj_listdev;
+__device__ struct sphere *obj_listdev = 0;
 __device__ struct vec3 lightsdev[MAX_LIGHTS];
 __device__ int lnumdev = 0;
 __device__ struct camera camdev;
@@ -732,7 +732,10 @@ __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoin
 void load_scene(FILE *fp) {
     char line[256], *ptr, type;
 
+    cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)));
     obj_list = (sphere *)malloc(sizeof(struct sphere));
+
+    obj_listdev->next = 0;
     obj_list->next = 0;
     
     while((ptr = fgets(line, 256, fp))) {
@@ -778,7 +781,9 @@ void load_scene(FILE *fp) {
         refl = atof(ptr);
 
         if(type == 's') { //THERE'S A PROBLEM HERE! THE OBJECT LIST SHOULD BE MALLOCED DIRECTLY INTO DEVICE MEMORY, NOT HOST MEMORY! ****************
-            struct sphere *sph = (sphere *)malloc(sizeof *sph);
+            struct sphere *sph = 0;
+            cudaMalloc((void**)&sph, sizeof *sph);
+
             sph->next = obj_listdev->next;
             obj_listdev->next = sph;
 
