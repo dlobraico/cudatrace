@@ -299,7 +299,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     // cudaMalloc a device array
     if (cudaSuccess != cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel)) {
-        printf("cudaMalloc failed");
+        printf("cudaMalloc failed: device_pixelspercore");
         exit(1);
     }
 
@@ -335,14 +335,14 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     
     // Now to create the special device 2D Array
     if (cudaSuccess != cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t))) {
-        printf("cudaMalloc failed");
+        printf("cudaMalloc failed: device_fb");
         exit(1);
     }
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
         if (cudaSuccess != cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t))) {
-            printf("cudaMalloc failed");
+            printf("cudaMalloc failed: h_temp");
             exit(1);
         }
     }
@@ -749,7 +749,7 @@ void load_scene(FILE *fp) {
 
     struct sphere *obj_listdev = 0;
     if (cudaSuccess != cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)))) {
-        printf("cudaMalloc failed");
+        printf("cudaMalloc failed: obj_listdev");
         exit(1);
     }
     //obj_listdev->next = 0;
@@ -801,17 +801,15 @@ void load_scene(FILE *fp) {
         refl = atof(ptr);
 
         if(type == 's') { 
-            struct sphere *sph = 0;
-            sph = (sphere *)malloc(sizeof(*sph));
-            struct sphere *sph_dev = 0;
-
-            if (cudaSuccess != cudaMalloc((void**)&sph_dev, sizeof *sph_dev)) {
-                printf("cudaMalloc failed");
-                exit(1);
-            }
-
+            struct sphere *sph = (sphere *)malloc(sizeof(*sph));
+            struct sphere *sph_dev;
             sph->next = obj_list->next;
             obj_list->next = sph;
+
+            if (cudaSuccess != cudaMalloc((void**)&sph_dev, sizeof *sph_dev)) {
+                printf("cudaMalloc failed: sph_dev");
+                exit(1);
+            }
 
             sph->pos = pos;
             sph->rad = rad;
