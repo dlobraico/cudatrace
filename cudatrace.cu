@@ -241,14 +241,20 @@ int main(int argc, char **argv) {
 
     //I'M NOT GOING TO COPY OVER OBJ_LIST BECAUSE I THINK OBJ_LISTDEV CAN BE DIRECTLY SENT TO THE DEVICE MEMORY! I HAVEN'T IMPLEMENTED THIS YET, THOUGH..
 
-    for(i=0; i<MAX_LIGHTS; i++)  //cuda memcopy could also work here
-    lightsdev[i] = lights[i];
-    lnumdev = lnum;
-    camdev = cam;
-    for(i=0; i<NRAN; i++)        //cuda memcopy could also work here
+    //cuda memcopy could also work here
+    for(i=0; i<MAX_LIGHTS; i++) {
+        lightsdev[i] = lights[i];
+        lnumdev = lnum;
+        camdev = cam;
+    }
+    //cuda memcopy could also work here
+    for(i=0; i<NRAN; i++) {
        uranddev[i]= urand[i];
-    for(i=0; i<NRAN; i++)        //cuda memcopy could also work here
+    }
+    //cuda memcopy could also work here
+    for(i=0; i<NRAN; i++) {
        iranddev[i] = irand[i]; 
+    }
 
     
     start_time = get_msec();
@@ -278,7 +284,6 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     int num_elementsParallelPixel = 3; //there will be an array of three structs which each determine the pixel one core will begin tracing at and the pixel it will end tracing at(x and y values)
  
-
     int block_size = 3;              //3 * 1 = total number of cores
     int grid_size = 1;
  
@@ -293,7 +298,10 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     host_pixelspercore = (struct parallelPixels*)malloc(num_bytes_ParallelPixel); 
 
     // cudaMalloc a device array
-    cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel);
+    if (cudaSuccess != cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel)) {
+        printf("cudaMalloc failed");
+        exit(1);
+    }
 
     
 //Ah, the frame buffer.
@@ -326,10 +334,17 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         host_fb[i] = (u_int32_t*) malloc(numOpsPerCore*sizeof(u_int32_t));
     
     // Now to create the special device 2D Array
-    cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t));
+    if (cudaSuccess != cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t))) {
+        printf("cudaMalloc failed");
+        exit(1);
+    }
+
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t));
+        if (cudaSuccess != cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t))) {
+            printf("cudaMalloc failed");
+            exit(1);
+        }
     }
     cudaMemcpy(device_fb, h_temp, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
 
@@ -392,7 +407,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples);
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
-    //check_cuda_errors(debug_errors, //GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
+    //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
     //once done, copy contents of device array to host array    
     for(int i=0; i<(block_size*grid_size); i++)
     {
@@ -733,11 +748,14 @@ void load_scene(FILE *fp) {
     char line[256], *ptr, type;
 
     struct sphere *obj_listdev = 0;
+    if (cudaSuccess != cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)))) {
+        printf("cudaMalloc failed");
+        exit(1);
+    }
+    //obj_listdev->next = 0;
 
-    cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)));
+    struct sphere *obj_list = 0;
     obj_list = (sphere *)malloc(sizeof(struct sphere));
-
-    obj_listdev->next = 0;
     obj_list->next = 0;
     
     while((ptr = fgets(line, 256, fp))) {
@@ -782,22 +800,33 @@ void load_scene(FILE *fp) {
         if(!(ptr = strtok(0, DELIM))) continue;
         refl = atof(ptr);
 
-        if(type == 's') { //THERE'S A PROBLEM HERE! THE OBJECT LIST SHOULD BE MALLOCED DIRECTLY INTO DEVICE MEMORY, NOT HOST MEMORY! ****************
+        if(type == 's') { 
             struct sphere *sph = 0;
-            cudaMalloc((void**)&sph, sizeof *sph);
+            sph = (sphere *)malloc(sizeof(*sph));
+            struct sphere *sph_dev = 0;
 
-            sph->next = obj_listdev->next;
-            obj_listdev->next = sph;
+            if (cudaSuccess != cudaMalloc((void**)&sph_dev, sizeof *sph_dev)) {
+                printf("cudaMalloc failed");
+                exit(1);
+            }
+
+            sph->next = obj_list->next;
+            obj_list->next = sph;
 
             sph->pos = pos;
             sph->rad = rad;
             sph->mat.col = col;
             sph->mat.spow = spow;
             sph->mat.refl = refl;
+
+            cudaMemcpy(&sph_dev, &sph, sizeof(sph), cudaMemcpyHostToDevice);
+
         } else {
             fprintf(stderr, "unknown type: %c\n", type);
         }
     }
+
+    cudaMemcpy(&obj_listdev, &obj_list, sizeof(obj_list), cudaMemcpyHostToDevice);
 }
 
 
