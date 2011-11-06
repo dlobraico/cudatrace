@@ -61,7 +61,6 @@ struct material {
     double refl;        /* reflection intensity */
 };
 
-
 struct sphere {
     struct vec3 pos;
     double rad;
@@ -814,8 +813,6 @@ void load_scene(FILE *fp) {
     }
 }
 
-
-
 void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
     struct vec3 pos = obj_list->pos;
     double rad = obj_list->rad;
@@ -852,6 +849,29 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
         i++;
     }
 }
+
+double get_ith_sphere(double *obj_list_flat, int index) {
+    double single_sphere[9];
+    int base_index = index * 9;
+
+    for (int i = 0; i <= 9; i++) {
+        single_sphere[i] = obj_list_flat[base_index + i]; 
+    }
+
+    /*
+       single_sphere[0] = sphere->pos.x
+       single_sphere[1] = sphere->pos.y
+       single_sphere[2] = sphere->pos.z
+       single_sphere[3] = sphere->rad
+       single_sphere[5] = sphere->mat.col.x
+       single_sphere[6] = sphere->mat.col.y
+       single_sphere[7] = sphere->mat.col.z
+       single_sphere[8] = sphere->mat.spow
+       single_sphere[9] = sphere->mat.refl
+     */
+    return *single_sphere; 
+}
+
 
 inline void check_cuda_errors(const char *filename, const int line_number)
 {
