@@ -38,6 +38,8 @@ typedef unsigned __int8 uint8_t;
 typedef unsigned __int32 uint32_t;
 #endif
 
+int objCounter = 0;
+
 struct parallelPixels { //STRUCT WHICH DIVIDES PIXELS FOR RENDER2 GLOBAL FUNCTION TO USE
     signed int start[1];
     signed int end[1];
@@ -94,6 +96,8 @@ __device__ struct vec3 get_sample_pos(int x, int y, int sample);
 __device__ struct vec3 jitter(int x, int y, int s);
 __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
+void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
+void flatten_sphere(struct sphere *sphere, double *sphere_flat);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -299,7 +303,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     // cudaMalloc a device array
     if (cudaSuccess != cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel)) {
-        printf("cudaMalloc failed: device_pixelspercore");
+        printf("cudaMalloc failed: device_pixelspercore\n");
         exit(1);
     }
 
@@ -335,14 +339,14 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     
     // Now to create the special device 2D Array
     if (cudaSuccess != cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t))) {
-        printf("cudaMalloc failed: device_fb");
+        printf("cudaMalloc failed: device_fb\n");
         exit(1);
     }
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
         if (cudaSuccess != cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t))) {
-            printf("cudaMalloc failed: h_temp");
+            printf("cudaMalloc failed: h_temp\n");
             exit(1);
         }
     }
@@ -747,14 +751,6 @@ __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoin
 void load_scene(FILE *fp) {
     char line[256], *ptr, type;
 
-    struct sphere *obj_listdev = 0;
-    if (cudaSuccess != cudaMalloc((void**)&obj_listdev, (sizeof (struct sphere)))) {
-        printf("cudaMalloc failed: obj_listdev");
-        exit(1);
-    }
-    //obj_listdev->next = 0;
-
-    struct sphere *obj_list = 0;
     obj_list = (sphere *)malloc(sizeof(struct sphere));
     obj_list->next = 0;
     
@@ -801,15 +797,10 @@ void load_scene(FILE *fp) {
         refl = atof(ptr);
 
         if(type == 's') { 
+            objCounter++;
             struct sphere *sph = (sphere *)malloc(sizeof(*sph));
-            struct sphere *sph_dev;
             sph->next = obj_list->next;
             obj_list->next = sph;
-
-            if (cudaSuccess != cudaMalloc((void**)&sph_dev, sizeof *sph_dev)) {
-                printf("cudaMalloc failed: sph_dev");
-                exit(1);
-            }
 
             sph->pos = pos;
             sph->rad = rad;
@@ -817,17 +808,50 @@ void load_scene(FILE *fp) {
             sph->mat.spow = spow;
             sph->mat.refl = refl;
 
-            cudaMemcpy(&sph_dev, &sph, sizeof(sph), cudaMemcpyHostToDevice);
-
         } else {
             fprintf(stderr, "unknown type: %c\n", type);
         }
     }
-
-    cudaMemcpy(&obj_listdev, &obj_list, sizeof(obj_list), cudaMemcpyHostToDevice);
 }
 
 
+
+void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
+    struct vec3 pos = obj_list->pos;
+    double rad = obj_list->rad;
+    struct material mat = obj_list->mat;
+
+    sphere_flat[0] = pos.x;
+    sphere_flat[1] = pos.y;
+    sphere_flat[2] = pos.z;
+    sphere_flat[3] = rad;
+    sphere_flat[4] = mat.col.x;
+    sphere_flat[5] = mat.col.y;
+    sphere_flat[6] = mat.col.z;
+    sphere_flat[7] = mat.spow;
+    sphere_flat[8] = mat.refl;
+}
+
+void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter) {
+    obj_list_flat = (double *)malloc(9*objCounter*sizeof(double));
+
+    double doubleCounter = objCounter*9;
+
+    for (int i = 0; i <= objCounter; i++) {
+        struct sphere *sphere = obj_list;
+        double sphere_flat[9];
+        flatten_sphere(sphere, sphere_flat);
+
+        for (int j = 0; j <= doubleCounter; j++) {
+            for (int k = 0; k <= 9; k++) {
+                obj_list_flat[j] = sphere_flat[k];
+            }
+        }
+
+        obj_list = obj_list->next;
+        i++;
+    }
+}
 
 inline void check_cuda_errors(const char *filename, const int line_number)
 {
