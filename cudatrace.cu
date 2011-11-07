@@ -86,8 +86,8 @@ struct camera {
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
 __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat); //SPECIFY ARGUMENTS TO RENDER2~!!!!
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, struct sphere2 *obj_list_flat); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
-__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, struct sphere2 *obj_list_flat);
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
+__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
 __device__ struct ray get_primary_ray(int x, int y, int sample);
@@ -97,6 +97,7 @@ __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoin
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
+double get_ith_sphere(double *obj_list_flat, int index);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -527,7 +528,7 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
-    double nearest_obj[9] = 0;
+    double nearest_obj[9];
     int iterCount = 0; 
     double iter[9];
     iter = get_ith_sphere(obj_list_flat_dev, iterCount);
