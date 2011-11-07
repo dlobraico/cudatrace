@@ -85,9 +85,9 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples); //SPECIFY ARGUMENTS TO RENDER2~!!!!
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
-__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata);
+__global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat); //SPECIFY ARGUMENTS TO RENDER2~!!!!
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, struct sphere2 *obj_list_flat); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
+__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, struct sphere2 *obj_list_flat);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
 __device__ struct ray get_primary_ray(int x, int y, int sample);
@@ -132,6 +132,7 @@ int xres = 800;
 int yres = 600;
 double aspect = 1.333333;
 struct sphere *obj_list;
+double *obj_list_flat;
 struct vec3 lights[MAX_LIGHTS];
 int lnum = 0;
 struct camera cam;
@@ -146,7 +147,7 @@ int irand[NRAN];
 __device__ int xresdev = 800;
 __device__ int yresdev = 600;
 __device__ double aspectdev = 1.333333;
-__device__ struct sphere *obj_listdev = 0;
+//__device__ struct sphere *obj_listdev = 0;
 __device__ struct vec3 lightsdev[MAX_LIGHTS];
 __device__ int lnumdev = 0;
 __device__ struct camera camdev;
@@ -405,9 +406,19 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     }
     //copy over host array which determines which pixels should have rays traced per core to device array
     cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice);
+
+    double *obj_list_flat = 0;
+
+	if (cudaSuccess != cudaMalloc((void**)&obj_list_flat_dev, (sizeof (double)*objCounter*9))) 
+	{ //create obj_list_flat_dev array size of objCounter
+        printf("cudaMalloc failed: obj_list_flat_dev");
+        exit(1);
+    }
+	
+	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
     //FUNCTION TIEM
-    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples);
+    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev);
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
     //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
@@ -453,7 +464,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 }   
 
 
-__global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples)            //SPECIFY ARGUMENTS!!!
+__global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev)            //SPECIFY ARGUMENTS!!!
 {
     int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
 
@@ -481,11 +492,11 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
             r = g = b = 0.0;
             
             for(s=0; s<samples; s++) {
-                struct vec3 col = trace(get_primary_ray(i, j, s), 0, isReflect, RData);
+                struct vec3 col = trace(get_primary_ray(i, j, s), 0, isReflect, RData, obj_list_flat_dev);
                 while (*isReflect)        //while there are still reflection rays to trace
                 {
                     struct vec3 rcol;    //holds the output of the reflection ray calculcation
-                    rcol = trace(RData->ray, RData->depth, isReflect, RData);    //trace a reflection ray
+                    rcol = trace(RData->ray, RData->depth, isReflect, RData, obj_list_flat_dev);    //trace a reflection ray
                     col.x += rcol.x * RData->reflection;       //I really am unsure about the usage of pointers here..
                     col.y += rcol.y * RData->reflection;
                     col.z += rcol.z * RData->reflection;
@@ -513,11 +524,13 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
 /* trace a ray throught the scene recursively (the recursion happens through                
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata) {
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
-    struct sphere *nearest_obj = 0;
-    struct sphere *iter = obj_listdev->next;
+    double nearest_obj[9] = 0;
+    int iterCount = 0; 
+    double iter[9];
+    iter = get_ith_sphere(obj_list_flat_dev, iterCount);
 
     /* if we reached the recursion limit, bail out */
     if(depth >= MAX_RAY_DEPTH) {
@@ -533,12 +546,13 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
                 nearest_sp = sp;
             }
         }
-        iter = iter->next;
+        iterCount++;
+        iter = get_ith_sphere(obj_list_flat_dev, iterCount);
     }
 
     /* and perform shading calculations as needed by calling shade() */
     if(nearest_obj) {
-        col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata);
+        col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata, obj_list_flat_dev);
     } else {
         col.x = col.y = col.z = 0.0;
     }
@@ -549,16 +563,18 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
 /* Calculates direct illumination with the phong reflectance model.
  * Also handles reflections by calling trace again, if necessary.
  */
-__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata) {
+__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
     int i;
     struct vec3 col = {0, 0, 0};
+    int iterCount = 0;
 
     /* for all lights ... */
     for(i=0; i<lnumdev; i++) {
         double ispec, idiff;
         struct vec3 ldir;
         struct ray shadow_ray;
-        struct sphere *iter = obj_listdev->next;
+        double iter[9];
+        iter = get_ith_sphere(obj_list_flat_dev, iterCount);
         int in_shadow = 0;
 
         ldir.x = lightsdev[i].x - sp->pos.x;
@@ -574,7 +590,8 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, i
                 in_shadow = 1;
                 break;
             }
-            iter = iter->next;
+            iterCount++;
+            iter = get_ith_sphere(obj_list_flat_dev, iterCount);
         }
 
         /* and if we're not in shadow, calculate direct illumination with the phong model. */
@@ -582,11 +599,11 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, i
             NORMALIZE(ldir);
 
             idiff = MAX(DOT(sp->normal, ldir), 0.0);
-            ispec = obj->mat.spow > 0.0 ? pow(MAX(DOT(sp->vref, ldir), 0.0), obj->mat.spow) : 0.0;
+            ispec = obj[7] > 0.0 ? pow(MAX(DOT(sp->vref, ldir), 0.0), obj[7]) : 0.0;  // ASSUMING OBJ[7] = obj->mat.spow
 
-            col.x += idiff * obj->mat.col.x + ispec;
-            col.y += idiff * obj->mat.col.y + ispec;
-            col.z += idiff * obj->mat.col.z + ispec;
+            col.x += idiff * obj[4] + ispec;      // assuming obj[4] = obj->mat.col.x
+            col.y += idiff * obj[5] + ispec;      // assuming obj[5] = obj->mat.col.y
+            col.z += idiff * obj[6] + ispec;   //assuming obj[6] = obj->may.col.z
         }
     }
 
@@ -594,7 +611,7 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, i
      * to calculate the light arriving from the mirror direction.
      */
      //FOR EVERY REFLECTION RAY THAT IS SUPPOSED TO BE TRACED, THERE MUST BE A STRUCTURE SAVED, CONTAINING THE SPECIFIC PIXEL, THE RAY, AND DEPTH + 1. ALL OF THESE MUST BE STORED IN A "NEW" ARRAY, WHICH IS THEN ACCESSED IN RENDER2 FOLLOWING THE MAIN COMPUTATIONS.!!!!!!!!!!!*******************8
-    if(obj->mat.refl > 0.0) {
+    if(obj[8] > 0.0) {           //assuming obj[8] = obj->mat.refl
         isReflect[0] = 1;    //set isReflect to affirmative 
 
 
@@ -604,7 +621,7 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, i
         Rdata->ray.dir.y *= RAY_MAG;
         Rdata->ray.dir.z *= RAY_MAG;
         Rdata->depth = depth + 1;
-        Rdata->reflection = obj->mat.refl;
+        Rdata->reflection = obj[8];
         
 
     }
@@ -707,16 +724,16 @@ __device__ struct vec3 jitter(int x, int y, int s) {
  * Also the surface point parameters like position, normal, etc are returned through
  * the sp pointer if it is not NULL.
  */
-__device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoint *sp) {
+__device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp) {
     double a, b, c, d, sqrt_d, t1, t2;
     
     a = SQ(ray.dir.x) + SQ(ray.dir.y) + SQ(ray.dir.z);
     b = 2.0 * ray.dir.x * (ray.orig.x - sph->pos.x) +
                 2.0 * ray.dir.y * (ray.orig.y - sph->pos.y) +
                 2.0 * ray.dir.z * (ray.orig.z - sph->pos.z);
-    c = SQ(sph->pos.x) + SQ(sph->pos.y) + SQ(sph->pos.z) +
+    c = SQ(sph[0]) + SQ(sph[1]) + SQ(sph[2]) +
                 SQ(ray.orig.x) + SQ(ray.orig.y) + SQ(ray.orig.z) +
-                2.0 * (-sph->pos.x * ray.orig.x - sph->pos.y * ray.orig.y - sph->pos.z * ray.orig.z) - SQ(sph->rad);
+                2.0 * (-sph[0] * ray.orig.x - sph[1] * ray.orig.y - sph[2] * ray.orig.z) - SQ(sph[3]);
     
     if((d = SQ(b) - 4.0 * a * c) < 0.0) return 0;
 
@@ -735,9 +752,9 @@ __device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoin
         sp->pos.y = ray.orig.y + ray.dir.y * sp->dist;
         sp->pos.z = ray.orig.z + ray.dir.z * sp->dist;
         
-        sp->normal.x = (sp->pos.x - sph->pos.x) / sph->rad;
-        sp->normal.y = (sp->pos.y - sph->pos.y) / sph->rad;
-        sp->normal.z = (sp->pos.z - sph->pos.z) / sph->rad;
+        sp->normal.x = (sp->pos.x - sph[0]) / sph[3];
+        sp->normal.y = (sp->pos.y - sph[1]) / sph[3];
+        sp->normal.z = (sp->pos.z - sph[2]) / sph[3];
 
         sp->vref = reflect(ray.dir, sp->normal);
         NORMALIZE(sp->vref);
@@ -752,6 +769,7 @@ void load_scene(FILE *fp) {
 
     obj_list = (sphere *)malloc(sizeof(struct sphere));
     obj_list->next = 0;
+    objCounter = 0;
     
     while((ptr = fgets(line, 256, fp))) {
         int i;
@@ -863,11 +881,11 @@ double get_ith_sphere(double *obj_list_flat, int index) {
        single_sphere[1] = sphere->pos.y
        single_sphere[2] = sphere->pos.z
        single_sphere[3] = sphere->rad
-       single_sphere[5] = sphere->mat.col.x
-       single_sphere[6] = sphere->mat.col.y
-       single_sphere[7] = sphere->mat.col.z
-       single_sphere[8] = sphere->mat.spow
-       single_sphere[9] = sphere->mat.refl
+       single_sphere[4] = sphere->mat.col.x
+       single_sphere[5] = sphere->mat.col.y
+       single_sphere[6] = sphere->mat.col.z
+       single_sphere[7] = sphere->mat.spow
+       single_sphere[8] = sphere->mat.refl
      */
     return *single_sphere; 
 }
