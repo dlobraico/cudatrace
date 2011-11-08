@@ -408,7 +408,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //copy over host array which determines which pixels should have rays traced per core to device array
     cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice);
 
-    double *obj_list_flat = 0;
+    double *obj_list_flat_dev = 0;
 
 	if (cudaSuccess != cudaMalloc((void**)&obj_list_flat_dev, (sizeof (double)*objCounter*9))) 
 	{ //create obj_list_flat_dev array size of objCounter
@@ -445,6 +445,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //free host and device pixelspercore 
 
     free(host_pixelspercore);  
+    cudaFree(obj_list_flat_dev);
     cudaFree(device_pixelspercore);
     
     //free host and device fb 2D arrays
@@ -729,9 +730,9 @@ __device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp) {
     double a, b, c, d, sqrt_d, t1, t2;
     
     a = SQ(ray.dir.x) + SQ(ray.dir.y) + SQ(ray.dir.z);
-    b = 2.0 * ray.dir.x * (ray.orig.x - sph->pos.x) +
-                2.0 * ray.dir.y * (ray.orig.y - sph->pos.y) +
-                2.0 * ray.dir.z * (ray.orig.z - sph->pos.z);
+    b = 2.0 * ray.dir.x * (ray.orig.x - sph[0]) +
+                2.0 * ray.dir.y * (ray.orig.y - sph[1]) +
+                2.0 * ray.dir.z * (ray.orig.z - sph[2]);
     c = SQ(sph[0]) + SQ(sph[1]) + SQ(sph[2]) +
                 SQ(ray.orig.x) + SQ(ray.orig.y) + SQ(ray.orig.z) +
                 2.0 * (-sph[0] * ray.orig.x - sph[1] * ray.orig.y - sph[2] * ray.orig.z) - SQ(sph[3]);
@@ -869,7 +870,7 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
     }
 }
 
-double get_ith_sphere(double *obj_list_flat, int index) {
+double *get_ith_sphere(double *obj_list_flat, int index) {
     double single_sphere[9];
     int base_index = index * 9;
 
