@@ -101,6 +101,10 @@ void get_ith_sphere(double *obj_list_flat, int index);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
+void cudasafe( cudaError_t error, char* message) {
+   if(error!=cudaSuccess) { fprintf(stderr,"ERROR: %s : %i\n",message,error); exit(-1); }
+}
+
 #define MAX_LIGHTS      16              /* maximum number of lights */
 #define RAY_MAG         1000.0          /* trace rays of this magnitude */
 #define MAX_RAY_DEPTH   5               /* raytrace recursion limit */
@@ -334,10 +338,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        if (cudaSuccess != cudaMalloc(&host_fb[i], numOpsPerCore*sizeof(u_int32_t))) {
-            printf("cudaMalloc host_fb failed");
-            exit(1);
-        };
+        cudasafe( cudaMalloc(&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
     }
     cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
 
@@ -879,7 +880,6 @@ inline void check_cuda_errors(const char *filename, const int line_number)
     }
     #endif
 }   
-
 
 /* provide a millisecond-resolution timer for each system */
 #if defined(__unix__) || defined(unix) || defined(__MACH__)
