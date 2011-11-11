@@ -334,7 +334,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        if (cudaSuccess != cudaMalloc( (void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t))) {
+        if (cudaSuccess != cudaMalloc(&host_fb[i], numOpsPerCore*sizeof(u_int32_t))) {
             printf("cudaMalloc host_fb failed");
             exit(1);
         };
