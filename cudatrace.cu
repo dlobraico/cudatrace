@@ -330,7 +330,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //Special host 2D array is created(malloced)
     
     // Now to create the special device 2D Array
-    cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t));
+    cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t*));
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
