@@ -87,7 +87,7 @@ struct camera {
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
 __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat); //SPECIFY ARGUMENTS TO RENDER2~!!!!
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
-__device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat);
+__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
 __device__ struct ray get_primary_ray(int x, int y, int sample);
@@ -874,7 +874,7 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
     }
 }
 
-void get_ith_sphere(double *obj_list_flat, int index) {
+__device__ void get_ith_sphere(double *obj_list_flat, int index) {
     double *single_sphere;
     single_sphere = (double *)malloc(9*sizeof(double));
     int base_index = index * 9;
