@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof *pixels))) {
+    if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof(*pixels)))) {
         perror("pixel buffer allocation failed");
         return EXIT_FAILURE;
     }
@@ -318,31 +318,6 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //Then, we could transfer this 2D array to a host 2D array.
 //Finally, we could loop through all of the output in the 2D array and sequentially put it into a regular 1D array(the REAL frame buffer). ***Ah, did someone say "sequentially"? Is this an area which could possibly be made parallel as well?**
 //Yup, that's it. You've just read through the most inefficient idea ever.  
-
-  
-
-
-
-
-
-
-
-//EXAMPLE FROM FORUM
-//cudaMalloc((void**)&ppArray_a, 10 * sizeof(int*));
-//for(int i=0; i<10; i++)
-//{
-//  cudaMalloc(&someHostArray[i], 100*sizeof(int)); /* Replace 100 with the dimension that u want */
-//}
-//cudaMemcpy(ppArray_a, someHostArray, 10*sizeof(int *), cudaMemcpyHostToDevice);
-
-
-
-
-
-
-
-
-
   
 //and now to determine the details of the 2D fb array...
 // code heavily taken from 
@@ -359,7 +334,10 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        cudaMalloc( (void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t));
+        if (cudaSuccess != cudaMalloc( (void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t))) {
+            printf("cudaMalloc host_fb failed");
+            exit(1);
+        };
     }
     cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
 
@@ -415,7 +393,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     double *obj_list_flat_dev = 0;
 
     //create obj_list_flat_dev array size of objCounter
-	cudaMalloc((void**)&obj_list_flat_dev, (sizeof (double)*objCounter*9));
+	cudaMalloc((void**)&obj_list_flat_dev, (sizeof(double)*objCounter*9));
 	
 	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
@@ -426,29 +404,6 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
     //once done, copy contents of device array to host array  
 
-
-
-
-//EXAMPLE FROM FORUM
-//cudaMemcpy(someHostArray, d_A, N*sizeof(void *), cudaMemcpyDeviceToHost);
-//for(int i=0; i<N; i++)
-//{
-//  cudaFree(someHostArray[i]);
-//}
-//cudaFree(d_A);
-
-
-
-
-
-    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*sizeof(void *), cudaMemcpyDeviceToHost);
-
-    for (int i=0; i<(block_size*grid_size); i++)
-    {
-       cudaFree(host_fb[i]);
-    }
-    cudaFree(device_fb);	
-  
     //then, copy host_fb contents to THE REAL frame buffer array so that everything is in order...
     
     int fbCounter = 0;
@@ -469,20 +424,15 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaFree(device_pixelspercore);
     
     //free host and device fb 2D arrays
+    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*sizeof(void *), cudaMemcpyDeviceToHost);
 
-    //this might have to be looked at in terms of repeated incrementer values and the like (LIKE USING THE VALUE i MULTIPLE TIMES? **********************************************)
-    for(int i=0; i<(block_size*grid_size); i++)
+    for (int i=0; i<(block_size*grid_size); i++)
     {
-        cudaFree(device_fb[i]);
+       cudaFree(host_fb[i]);
     }
-    cudaFree(device_fb);
+    cudaFree(device_fb);	
+  
 
-    for (int i = 0; i < (block_size*grid_size); i++)
-    {  
-       free(host_fb[i]);  
-    }  
-    free(host_fb);  
-    
 }   
 
 
