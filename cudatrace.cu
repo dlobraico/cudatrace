@@ -319,7 +319,31 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //Finally, we could loop through all of the output in the 2D array and sequentially put it into a regular 1D array(the REAL frame buffer). ***Ah, did someone say "sequentially"? Is this an area which could possibly be made parallel as well?**
 //Yup, that's it. You've just read through the most inefficient idea ever.  
 
-    
+  
+
+
+
+
+
+
+
+//EXAMPLE FROM FORUM
+//cudaMalloc((void**)&ppArray_a, 10 * sizeof(int*));
+//for(int i=0; i<10; i++)
+//{
+//  cudaMalloc(&someHostArray[i], 100*sizeof(int)); /* Replace 100 with the dimension that u want */
+//}
+//cudaMemcpy(ppArray_a, someHostArray, 10*sizeof(int *), cudaMemcpyHostToDevice);
+
+
+
+
+
+
+
+
+
+  
 //and now to determine the details of the 2D fb array...
 // code heavily taken from 
 //http://forums.nvidia.com/index.php?s=5712c99a6838532e8e43081108fce9f8&showtopic=69403&st=20
@@ -327,30 +351,20 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     u_int32_t **device_fb = 0;
     u_int32_t **host_fb = 0;
-    u_int32_t *h_temp[block_size*grid_size];
 
-    host_fb = (u_int32_t**) malloc((block_size*grid_size)*sizeof(u_int32_t*));
     //Special host 2D array is created(malloced)
-    for (int i = 0; i < (block_size*grid_size); i++)
-        host_fb[i] = (u_int32_t*) malloc(numOpsPerCore*sizeof(u_int32_t));
     
     // Now to create the special device 2D Array
     cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t));
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t));
+        cudaMalloc( (void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t));
     }
-    cudaMemcpy(device_fb, h_temp, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
-
-    // Do not destroy the contents of h_temp
-    // So, we dont need to copy the pointers from the device again and again. We will hold a copy of the row pointers in h_temp
+    cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
 
 
-    for(int i=0; i<block_size*grid_size; i++)
-    {
-        cudaMemcpy(h_temp[i], host_fb[i], numOpsPerCore*sizeof(u_int32_t), cudaMemcpyHostToDevice);
-    }
+
     //PUT DATA INTO PARALLEL PIXEL STRUCT PIXELSPERCORE!!
 
     int completeCore = 0;   //representing how many cores have the max data stored
@@ -410,12 +424,31 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
     //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
-    //once done, copy contents of device array to host array    
-    for(int i=0; i<(block_size*grid_size); i++)
-    {
-        cudaMemcpy(host_fb[i], h_temp[i], numOpsPerCore*sizeof(u_int32_t), cudaMemcpyDeviceToHost);
-    }//WHAT EXACTLY IS THE PURPOSE OF THE H_TEMP ARRAY? IT SHOULD BE FREED! CAN IT BE GOTTEN RID OF WITHOUT A PROBLEM???       ******IMPLEEEEEEEEEEEMEEEEEEEEEEENNNNNNNNNNNNTTTTTTT!!!!!!!******
+    //once done, copy contents of device array to host array  
 
+
+
+
+//EXAMPLE FROM FORUM
+//cudaMemcpy(someHostArray, d_A, N*sizeof(void *), cudaMemcpyDeviceToHost);
+//for(int i=0; i<N; i++)
+//{
+//  cudaFree(someHostArray[i]);
+//}
+//cudaFree(d_A);
+
+
+
+
+
+    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*sizeof(void *), cudaMemcpyDeviceToHost);
+
+    for (int i=0; i<(block_size*grid_size); i++)
+    {
+       cudaFree(host_fb[i]);
+    }
+    cudaFree(device_fb);	
+  
     //then, copy host_fb contents to THE REAL frame buffer array so that everything is in order...
     
     int fbCounter = 0;
