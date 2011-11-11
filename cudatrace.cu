@@ -303,11 +303,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     host_pixelspercore = (struct parallelPixels*)malloc(num_bytes_ParallelPixel); 
 
     // cudaMalloc a device array
-    if (cudaSuccess != cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel)) {
-        printf("cudaMalloc failed: device_pixelspercore\n");
-        exit(1);
-    }
-
+    cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel); 
     
 //Ah, the frame buffer.
 //Originally, the frame buffer contained all of the pixels of the frame, sorted in order(of increasing x per y value?)
@@ -339,17 +335,11 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         host_fb[i] = (u_int32_t*) malloc(numOpsPerCore*sizeof(u_int32_t));
     
     // Now to create the special device 2D Array
-    if (cudaSuccess != cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t))) {
-        printf("cudaMalloc failed: device_fb\n");
-        exit(1);
-    }
+    cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t));
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        if (cudaSuccess != cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t))) {
-            printf("cudaMalloc failed: h_temp\n");
-            exit(1);
-        }
+        cudaMalloc( (void **)&h_temp[i], numOpsPerCore*sizeof(u_int32_t));
     }
     cudaMemcpy(device_fb, h_temp, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice);
 
@@ -410,11 +400,8 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     double *obj_list_flat_dev = 0;
 
-	if (cudaSuccess != cudaMalloc((void**)&obj_list_flat_dev, (sizeof (double)*objCounter*9))) 
-	{ //create obj_list_flat_dev array size of objCounter
-        printf("cudaMalloc failed: obj_list_flat_dev");
-        exit(1);
-    }
+    //create obj_list_flat_dev array size of objCounter
+	cudaMalloc((void**)&obj_list_flat_dev, (sizeof (double)*objCounter*9));
 	
 	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
