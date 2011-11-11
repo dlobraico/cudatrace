@@ -93,11 +93,11 @@ __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
 __device__ struct ray get_primary_ray(int x, int y, int sample);
 __device__ struct vec3 get_sample_pos(int x, int y, int sample);
 __device__ struct vec3 jitter(int x, int y, int s);
-__device__ int ray_sphere(const struct sphere *sph, struct ray ray, struct spoint *sp);
+__device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
-double get_ith_sphere(double *obj_list_flat, int index);
+void get_ith_sphere(double *obj_list_flat, int index);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -529,10 +529,12 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
-    double nearest_obj[9];
+    double *nearest_obj = (double *)malloc(9*sizeof(double));
+
     int iterCount = 0; 
-    double iter[9];
-    iter = get_ith_sphere(obj_list_flat_dev, iterCount);
+
+    double *flat_sphere = (double *)malloc(9*sizeof(double));
+    get_ith_sphere(obj_list_flat_dev, iterCount); // populates flat_sphere
 
     /* if we reached the recursion limit, bail out */
     if(depth >= MAX_RAY_DEPTH) {
@@ -541,15 +543,15 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     }
     
     /* find the nearest intersection ... */
-    while(iter) {
-        if(ray_sphere(iter, ray, &sp)) {
+    while(flat_sphere) {
+        if(ray_sphere(flat_sphere, ray, &sp)) {
             if(!nearest_obj || sp.dist < nearest_sp.dist) {
-                nearest_obj = iter;
+                nearest_obj = flat_sphere;
                 nearest_sp = sp;
             }
         }
         iterCount++;
-        iter = get_ith_sphere(obj_list_flat_dev, iterCount);
+        get_ith_sphere(obj_list_flat_dev, iterCount);
     }
 
     /* and perform shading calculations as needed by calling shade() */
@@ -575,8 +577,10 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         double ispec, idiff;
         struct vec3 ldir;
         struct ray shadow_ray;
-        double iter[9];
-        iter = get_ith_sphere(obj_list_flat_dev, iterCount);
+
+        double *flat_sphere = (double *)malloc(9*sizeof(double));
+        get_ith_sphere(obj_list_flat_dev, iterCount); // populates flat_sphere
+
         int in_shadow = 0;
 
         ldir.x = lightsdev[i].x - sp->pos.x;
@@ -587,13 +591,13 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         shadow_ray.dir = ldir;
 
         /* shoot shadow rays to determine if we have a line of sight with the light */
-        while(iter) {
-            if(ray_sphere(iter, shadow_ray, 0)) {
+        while(flat_sphere) {
+            if(ray_sphere(flat_sphere, shadow_ray, 0)) {
                 in_shadow = 1;
                 break;
             }
             iterCount++;
-            iter = get_ith_sphere(obj_list_flat_dev, iterCount);
+            get_ith_sphere(obj_list_flat_dev, iterCount);
         }
 
         /* and if we're not in shadow, calculate direct illumination with the phong model. */
@@ -870,8 +874,9 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
     }
 }
 
-double *get_ith_sphere(double *obj_list_flat, int index) {
-    double single_sphere[9];
+void get_ith_sphere(double *obj_list_flat, int index) {
+    double *single_sphere;
+    single_sphere = (double *)malloc(9*sizeof(double));
     int base_index = index * 9;
 
     for (int i = 0; i <= 9; i++) {
@@ -889,7 +894,6 @@ double *get_ith_sphere(double *obj_list_flat, int index) {
        single_sphere[7] = sphere->mat.spow
        single_sphere[8] = sphere->mat.refl
      */
-    return *single_sphere; 
 }
 
 
