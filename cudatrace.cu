@@ -338,7 +338,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        cudasafe( cudaMalloc(&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
+        cudasafe( cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
     }
     cudasafe( cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
 
