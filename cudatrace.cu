@@ -453,7 +453,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //this might have to be looked at in terms of repeated incrementer values and the like (LIKE USING THE VALUE i MULTIPLE TIMES? **********************************************)
     for(int i=0; i<(block_size*grid_size); i++)
     {
-        cudaFree(host_fb[i]);
+        cudaFree(device_fb[i]);
     }
     cudaFree(device_fb);
 
