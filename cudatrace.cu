@@ -327,22 +327,21 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 // code heavily taken from 
 //http://forums.nvidia.com/index.php?s=5712c99a6838532e8e43081108fce9f8&showtopic=69403&st=20
 // AND http://pleasemakeanote.blogspot.com/2008/06/2d-arrays-in-c-using-malloc.html
+// AND http://stackoverflow.com/questions/8098324/cudamalloc-failing-for-2d-array-error-code-11/8100631#8100631
+
 
     u_int32_t **device_fb = 0;
     u_int32_t **host_fb = 0;
+    size_t arr_size = (block_size*grid_size) * sizeof(u_int32_t);
 
-    //Special host 2D array is created(malloced)
-    
-    // Now to create the special device 2D Array
-    cudasafe( cudaMalloc((void **)&device_fb, (block_size*grid_size)*sizeof(u_int32_t*)), "cudaMalloc");
+    cudasafe(cudaMalloc((void **)&device_fb, arr_size), "cudaMalloc");
+    host_fb = (u_int32_t **)malloc(arr_size);
 
-    for(int i=0; i<(block_size*grid_size); i++)
-    {
-        cudasafe( cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
+    for(int i=0; i<(block_size*grid_size); i++) {
+        cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t));
     }
-    cudasafe( cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
 
-
+    cudasafe(cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
 
     //PUT DATA INTO PARALLEL PIXEL STRUCT PIXELSPERCORE!!
 
