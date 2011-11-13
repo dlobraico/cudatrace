@@ -3,7 +3,7 @@ bin = cudatrace
 src = cudatrace.cu
 
 CC = nvcc
-CFLAGS = -g -G -O0 -arch sm_20 -lm -lpthread
+CFLAGS = -g -G -O0 -arch sm_20 -lm -lpthread -m64
 
 $(bin): $(src)
 	$(CC) -o $@ $(src) $(CFLAGS)

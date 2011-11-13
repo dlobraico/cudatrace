@@ -97,7 +97,7 @@ __device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
-void get_ith_sphere(double *obj_list_flat, int index);
+void get_ith_sphere(double *flat_sphere, double *obj_list_flat, int index);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -338,7 +338,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     host_fb = (u_int32_t **)malloc(arr_size);
 
     for(int i=0; i<(block_size*grid_size); i++) {
-        cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t));
+        cudasafe(cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
     }
 
     cudasafe(cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
@@ -389,6 +389,8 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     }
     //copy over host array which determines which pixels should have rays traced per core to device array
     cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice);
+
+    flatten_obj_list(obj_list, obj_list_flat, objCounter);
 
     double *obj_list_flat_dev = 0;
 
@@ -504,7 +506,7 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     int iterCount = 0; 
 
     double *flat_sphere = (double *)malloc(9*sizeof(double));
-    get_ith_sphere(obj_list_flat_dev, iterCount); // populates flat_sphere
+    get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
 
     /* if we reached the recursion limit, bail out */
     if(depth >= MAX_RAY_DEPTH) {
@@ -521,7 +523,7 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
             }
         }
         iterCount++;
-        get_ith_sphere(obj_list_flat_dev, iterCount);
+        get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount);
     }
 
     /* and perform shading calculations as needed by calling shade() */
@@ -530,6 +532,9 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     } else {
         col.x = col.y = col.z = 0.0;
     }
+
+    free(nearest_obj);
+    free(flat_sphere);
 
     return col;
 }
@@ -549,7 +554,7 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         struct ray shadow_ray;
 
         double *flat_sphere = (double *)malloc(9*sizeof(double));
-        get_ith_sphere(obj_list_flat_dev, iterCount); // populates flat_sphere
+        get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
 
         int in_shadow = 0;
 
@@ -567,7 +572,7 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
                 break;
             }
             iterCount++;
-            get_ith_sphere(obj_list_flat_dev, iterCount);
+            get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount);
         }
 
         /* and if we're not in shadow, calculate direct illumination with the phong model. */
@@ -844,13 +849,11 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
     }
 }
 
-__device__ void get_ith_sphere(double *obj_list_flat, int index) {
-    double *single_sphere;
-    single_sphere = (double *)malloc(9*sizeof(double));
+__device__ void get_ith_sphere(double* flat_sphere, double *obj_list_flat, int index) {
     int base_index = index * 9;
 
     for (int i = 0; i <= 9; i++) {
-        single_sphere[i] = obj_list_flat[base_index + i]; 
+        flat_sphere[i] = obj_list_flat[base_index + i]; 
     }
 
     /*
