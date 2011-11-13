@@ -501,11 +501,11 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
-    double *nearest_obj = (double *)malloc(9*sizeof(double));
+    double nearest_obj[9];
 
     int iterCount = 0; 
 
-    double *flat_sphere = (double *)malloc(9*sizeof(double));
+    double flat_sphere[9];
     get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
 
     /* if we reached the recursion limit, bail out */
@@ -518,7 +518,9 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     while(flat_sphere) {
         if(ray_sphere(flat_sphere, ray, &sp)) {
             if(!nearest_obj || sp.dist < nearest_sp.dist) {
-                nearest_obj = flat_sphere;
+                for (int i = 0; i>=9; i++) {
+                nearest_obj[i] = flat_sphere[i];
+                }
                 nearest_sp = sp;
             }
         }
@@ -532,9 +534,6 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     } else {
         col.x = col.y = col.z = 0.0;
     }
-
-    free(nearest_obj);
-    free(flat_sphere);
 
     return col;
 }
@@ -553,7 +552,7 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         struct vec3 ldir;
         struct ray shadow_ray;
 
-        double *flat_sphere = (double *)malloc(9*sizeof(double));
+        double flat_sphere[9];
         get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
 
         int in_shadow = 0;
