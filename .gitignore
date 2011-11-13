@@ -1,5 +1,6 @@
 cudatrace
+cudatrace-1Darray
 cudatrace.c
 tags
 scene.jpg
-cudatrace.dSYM
+*.dSYM
