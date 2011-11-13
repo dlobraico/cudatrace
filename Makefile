@@ -10,7 +10,7 @@ $(bin): $(src)
 
 .PHONY: test
 test:
-	./$(bin) -i c-ray-1.1/scene -o scene.jpg
+	./$(bin) -i c-ray-1.1/scene -o scene.ppm
 
 .PHONY: clean
 clean:
