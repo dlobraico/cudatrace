@@ -849,9 +849,9 @@ void load_scene(FILE *fp) {
 }
 
 void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
-    struct vec3 pos = obj_list->pos;
-    double rad = obj_list->rad;
-    struct material mat = obj_list->mat;
+    struct vec3 pos = sphere->pos;
+    double rad = sphere->rad;
+    struct material mat = sphere->mat;
 
     sphere_flat[0] = pos.x;
     sphere_flat[1] = pos.y;
@@ -869,14 +869,14 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
 
     double doubleCounter = objCounter*9;
 
-    for (int i = 0; i <= objCounter; i++) {
+    for (int i = 0; i < objCounter; i++) {
         struct sphere *sphere = obj_list;
         double sphere_flat[9];
         flatten_sphere(sphere, sphere_flat);
 
-        for (int j = 0; j <= doubleCounter; j++) {
-            for (int k = 0; k <= 9; k++) {
-                obj_list_flat[j] = sphere_flat[k];
+        for (int j = 0; j < doubleCounter; j++) {
+            for (int k = 0; k < 9; k++) {
+                obj_list_flat[9*j+k] = sphere_flat[k];
             }
         }
 
