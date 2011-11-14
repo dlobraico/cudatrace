@@ -401,7 +401,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
     //FUNCTION TIEM
-    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev);
+    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
     //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
