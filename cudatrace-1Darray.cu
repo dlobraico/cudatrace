@@ -85,19 +85,19 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore); //SPECIFY ARGUMENTS TO RENDER2~!!!!
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
-__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat);
+__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev); //SPECIFY ARGUMENTS TO RENDER2~!!!!
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
+__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
-__device__ struct ray get_primary_ray(int x, int y, int sample);
-__device__ struct vec3 get_sample_pos(int x, int y, int sample);
-__device__ struct vec3 jitter(int x, int y, int s);
+__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struct vec3 *uranddev, int *iranddev);
+__device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev);
+__device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev);
 __device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
-void get_ith_sphere(double *obj_list_flat, int index, double *flat_sphere);
+void get_ith_sphere(double *obj_list_flat, int index, double *sphere_flat);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -149,12 +149,12 @@ __device__ int xresdev = 800;
 __device__ int yresdev = 600;
 __device__ double aspectdev = 1.333333;
 //__device__ struct sphere *obj_listdev = 0;
-__device__ struct vec3 lightsdev[MAX_LIGHTS];
-__device__ int lnumdev = 0;
-__device__ struct camera camdev;
+//__device__ struct vec3 lightsdev[MAX_LIGHTS];
+//__device__ int lnumdev = 0;
+//__device__ struct camera camdev;
 
-__device__ struct vec3 uranddev[NRAN];
-__device__ int iranddev[NRAN];
+//__device__ struct vec3 uranddev[NRAN];
+//__device__ int iranddev[NRAN];
 
 
 const char *usage = {
@@ -247,19 +247,19 @@ int main(int argc, char **argv) {
     //I'M NOT GOING TO COPY OVER OBJ_LIST BECAUSE I THINK OBJ_LISTDEV CAN BE DIRECTLY SENT TO THE DEVICE MEMORY! I HAVEN'T IMPLEMENTED THIS YET, THOUGH..
 
     //cuda memcopy could also work here
-    for(i=0; i<MAX_LIGHTS; i++) {
-        lightsdev[i] = lights[i];
-        lnumdev = lnum;
-        camdev = cam;
-    }
+ //   for(i=0; i<MAX_LIGHTS; i++) {
+ //       lightsdev[i] = lights[i];
+ //       lnumdev = lnum;
+ //       camdev = cam;
+ //   }
     //cuda memcopy could also work here
-    for(i=0; i<NRAN; i++) {
-       uranddev[i]= urand[i];
-    }
+ //   for(i=0; i<NRAN; i++) {
+ //      uranddev[i]= urand[i];
+ //   }
     //cuda memcopy could also work here
-    for(i=0; i<NRAN; i++) {
-       iranddev[i] = irand[i]; 
-    }
+//    for(i=0; i<NRAN; i++) {
+ //      iranddev[i] = irand[i]; 
+ //   }
 
     
     start_time = get_msec();
@@ -416,8 +416,54 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     printf("obj_list_flat_dev memcopy and malloc success!\n");
     printf("device_fb = %d , device_pixelspercore = %d , samples = %d, obj_list_flat_dev = %d\n", device_fb, device_pixelspercore, samples, obj_list_flat_dev);	
+
+//lights and camera and whatnot
+
+	int lnumdev = 0;
+	struct camera camdev;
+
+	struct vec3 *lightsdev = 0;
+
+	cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3));
+
+	cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice);
+
+        lnumdev = lnum; //remember to pass lnumdev into render2!
+        camdev = cam;   //remember to pass camdev into render2!
+
+
+
+//urand and whatnot
+	struct vec3 *uranddev = 0;
+
+	cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3));
+
+	cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+
+
+//irand and whatnot
+
+	int *iranddev = 0;
+
+	cudaMalloc((void **)&iranddev, NRAN*sizeof(int));
+
+	cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     //FUNCTION TIEM
-    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore);
+    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
     //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
@@ -456,7 +502,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 }   
 
 
-__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore)            //SPECIFY ARGUMENTS!!!
+__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev)            //SPECIFY ARGUMENTS!!!
 {
     int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
 //    printf("index success!\n");	
@@ -495,12 +541,12 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
             r = g = b = 0.0;
             
             for(s=0; s<samples; s++) {
-                struct vec3 col = trace(get_primary_ray(i, j, s), 0, isReflect, RData, obj_list_flat_dev);
-		  printf("trace success!\n");	
+                struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), 0, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev);
+//		  printf("trace success!\n");	
                 while (*isReflect)        //while there are still reflection rays to trace
                 {
                     struct vec3 rcol;    //holds the output of the reflection ray calculcation
-                    rcol = trace(RData->ray, RData->depth, isReflect, RData, obj_list_flat_dev);    //trace a reflection ray
+                    rcol = trace(RData->ray, RData->depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev);    //trace a reflection ray
                     col.x += rcol.x * RData->reflection;       //I really am unsure about the usage of pointers here..
                     col.y += rcol.y * RData->reflection;
                     col.z += rcol.z * RData->reflection;
@@ -529,7 +575,7 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
 /* trace a ray throught the scene recursively (the recursion happens through                
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
 //    printf("beginning of trace success!\n");
     struct vec3 col;
     struct spoint sp, nearest_sp;
@@ -569,7 +615,7 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
     /* and perform shading calculations as needed by calling shade() */
     if(nearest_obj) {
 //	 printf("every part of trace up to shade success!\n");
-        col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata, obj_list_flat_dev);
+        col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata, obj_list_flat_dev, lnumdev, lightsdev);
     } else {
         col.x = col.y = col.z = 0.0;
     }
@@ -582,7 +628,7 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
 /* Calculates direct illumination with the phong reflectance model.
  * Also handles reflections by calling trace again, if necessary.
  */
-__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
+__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
     int i;
     struct vec3 col = {0, 0, 0};
     int iterCount = 0;
@@ -671,7 +717,7 @@ __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2) {
 }
 
 /* determine the primary ray corresponding to the specified pixel (x, y) */
-__device__ struct ray get_primary_ray(int x, int y, int sample) {
+__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struct vec3 *uranddev, int *iranddev) {
     struct ray ray;
     float m[3][3];
     struct vec3 i, j = {0, 1, 0}, k, dir, orig, foo;
@@ -688,7 +734,7 @@ __device__ struct ray get_primary_ray(int x, int y, int sample) {
     m[2][0] = i.z; m[2][1] = j.z; m[2][2] = k.z;
     
     ray.orig.x = ray.orig.y = ray.orig.z = 0.0;
-    ray.dir = get_sample_pos(x, y, sample);
+    ray.dir = get_sample_pos(x, y, sample, uranddev, iranddev);
     ray.dir.z = 1.0 / HALF_FOV;
     ray.dir.x *= RAY_MAG;
     ray.dir.y *= RAY_MAG;
@@ -714,7 +760,7 @@ __device__ struct ray get_primary_ray(int x, int y, int sample) {
 }
 
 
-__device__ struct vec3 get_sample_pos(int x, int y, int sample) {
+__device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
  //   double xsz = 2.0, ysz = xresdev / aspectdev;   not being used by program?
     /*static*/ double sf = 0.0;
@@ -727,7 +773,7 @@ __device__ struct vec3 get_sample_pos(int x, int y, int sample) {
     pt.y = -(((double)y / (double)yresdev) - 0.65) / aspectdev;
 
     if(sample) {
-        struct vec3 jt = jitter(x, y, sample);
+        struct vec3 jt = jitter(x, y, sample, uranddev, iranddev);
         pt.x += jt.x * sf;
         pt.y += jt.y * sf / aspectdev;
     }
@@ -735,7 +781,7 @@ __device__ struct vec3 get_sample_pos(int x, int y, int sample) {
 }
 
 /* jitter function taken from Graphics Gems I. */
-__device__ struct vec3 jitter(int x, int y, int s) {
+__device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
     pt.x = uranddev[(x + (y << 2) + iranddev[(x + s) & MASK]) & MASK].x;
     pt.y = uranddev[(y + (x << 2) + iranddev[(y + s) & MASK]) & MASK].y;
