@@ -334,14 +334,21 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     u_int32_t **host_fb = 0;
     size_t arr_size = (block_size*grid_size) * sizeof(u_int32_t);
 
-    cudasafe(cudaMalloc((void **)&device_fb, arr_size), "cudaMalloc");
+    //cudasafe(cudaMalloc((void **)&device_fb, arr_size), "cudaMalloc");
     host_fb = (u_int32_t **)malloc(arr_size);
+    device_fb = (u_int32_t **)malloc(arr_size);
+
 
     for(int i=0; i<(block_size*grid_size); i++) {
-        cudasafe(cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc");
+        cudasafe(cudaMalloc((void **)&device_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc device_fb");
+        cudasafe(cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc host_fb");
     }
 
-    cudasafe(cudaMemcpy(device_fb, host_fb, (block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
+    for(int i=0; i<(block_size*grid_size); i++) {
+        cudasafe(cudaMemcpy(device_fb[i], host_fb[i], numOpsPerCore*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy host_fb to device_fb");
+    }
+
+    //cudasafe(cudaMemcpy(device_fb, host_fb, numOpsPerCore*(block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
 
     //PUT DATA INTO PARALLEL PIXEL STRUCT PIXELSPERCORE!!
 

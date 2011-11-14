@@ -97,7 +97,7 @@ __device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
-void get_ith_sphere(double *flat_sphere, double *obj_list_flat, int index);
+void get_ith_sphere(double *obj_list_flat, int index, double *flat_sphere);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -331,24 +331,6 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
 
-
-
-//EXAMPLE FROM FORUM
-//cudaMalloc((void**)&ppArray_a, 10 * sizeof(int*));
-//for(int i=0; i<10; i++)
-//{
-//  cudaMalloc(&someHostArray[i], 100*sizeof(int)); /* Replace 100 with the dimension that u want */
-//}
-//cudaMemcpy(ppArray_a, someHostArray, 10*sizeof(int *), cudaMemcpyHostToDevice);
-
-
-
-
-
-
-
-
-
   
 //and now to determine the details of the 2D fb array...
 // code heavily taken from 
@@ -361,23 +343,12 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //Special host 2D array is created(malloced)
     
     // Now to create the special device 2D Array
-    size_t arr_size = block_size * grid_size * numOpsPerCore * sizeof(u_int32_t);
  	   
-	cudaMalloc((void **)&device_fb, arr_size);
-	host_fb = (u_int32_t*)malloc(arr_size); 
+	cudaMalloc((void **)&device_fb, (block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t));
+	host_fb = (u_int32_t*)malloc((block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t)); 
 
- //   for(int i=0; i<(block_size*grid_size); i++)
- //   {
- //       if (cudaSuccess != (cudaMalloc(&host_fb[i], numOpsPerCore*sizeof(u_int32_t))))
- //	{
- //		printf("cudaMalloc failed\n");
- // 		exit(1);
- // 	}
- //   }
+
     printf("cudamalloc framebuffer and host buffer success!\n");
-    cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice);
-
-    printf("cudamemcopy frame buffer success!\n");	
 
 
     //PUT DATA INTO PARALLEL PIXEL STRUCT PIXELSPERCORE!!
@@ -431,14 +402,16 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     printf("pixelspercore memcopy success!\n");	
 
-    flatten_obj_list(obj_list, obj_list_flat, objCounter);
+    flatten_obj_list(obj_list,obj_list_flat,objCounter);
 
     double *obj_list_flat_dev = 0;
+	
+
 
     //create obj_list_flat_dev array size of objCounter
-	cudaMalloc((void **)&obj_list_flat_dev, (sizeof (double)*objCounter*9));
+	cudaMalloc((void **)&obj_list_flat_dev, (sizeof(double) *objCounter*9));
 	
-	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
+	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double) *objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
 
     printf("obj_list_flat_dev memcopy and malloc success!\n");
@@ -453,29 +426,10 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
 
-//EXAMPLE FROM FORUM
-//cudaMemcpy(someHostArray, d_A, N*sizeof(void *), cudaMemcpyDeviceToHost);
-//for(int i=0; i<N; i++)
-//{
-//  cudaFree(someHostArray[i]);
-//}
-//cudaFree(d_A);
 
+    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t), cudaMemcpyDeviceToHost);
 
-
-
-
-    cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost);
-    printf("host_fb[0] = %d\n", host_fb[1]);
-
- //   for (int i=0; i<(block_size*grid_size); i++)
-//    {
- //      cudaFree(host_fb[i]);
- //   }
- //   cudaFree(device_fb);	
   
-    //then, copy host_fb contents to THE REAL frame buffer array so that everything is in order...
-    
 
     //THIS QUITE POSSIBLY DOESN'T HAVE TO BE HERE ANYMORE! HOST_FB CAN TURN INTO FB[]!  
     int fbCounter = 0;
@@ -497,20 +451,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaFree(obj_list_flat_dev);
     cudaFree(device_pixelspercore);
     
-    //free host and device fb 2D arrays
-
-    //this might have to be looked at in terms of repeated incrementer values and the like (LIKE USING THE VALUE i MULTIPLE TIMES? **********************************************)
- //   for(int i=0; i<(block_size*grid_size); i++)
- //   {
- //       cudaFree(device_fb[i]);
- //   }
- //   cudaFree(device_fb);
-
- //   for (int i = 0; i < (block_size*grid_size); i++)
- //   {  
- //      free(host_fb[i]);  
- //   }  
- //   free(host_fb);  
+ 
     
 }   
 
@@ -518,13 +459,24 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore)            //SPECIFY ARGUMENTS!!!
 {
     int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
-
+//    printf("index success!\n");	
     int s;
     int i = pixelsPerCore[index].start[0];   //x value of first pixel 
-    if (i==-1) return;                       //if a -1 value is placed in the start value, then there is no pertinent data here. return early. Note that this will not decrease speed of parallel operations, since the speed is determined by the slowest parallel operation..
+//    printf("x value success!\n");	
+    int c;
+    if (i==-1) 
+    {
+	for (c=0; c<numOpsPerCore; c++)
+	{
+	            fbDevice[index*numOpsPerCore+c] = (u_int32_t)0;
+	}
+     }                       //if a -1 value is placed in the start value, then there is no pertinent data here. return early. Note that this will not decrease speed of parallel operations, since the speed is determined by the slowest parallel operation..
     int j = pixelsPerCore[index].start[1];   //y value of first pixel
+//    printf("y value success!\n");
     int xsz = pixelsPerCore[index].end[0];   //x value of last pixel
+//    printf("x last value success!\n");
     int ysz = pixelsPerCore[index].end[1];   //y value of last pixel
+//    printf("y last value success!\n");
     int raysTraced = 0;                     // number of rays traced 
     int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
     isReflect[0] = 0;
@@ -544,6 +496,7 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
             
             for(s=0; s<samples; s++) {
                 struct vec3 col = trace(get_primary_ray(i, j, s), 0, isReflect, RData, obj_list_flat_dev);
+		  printf("trace success!\n");	
                 while (*isReflect)        //while there are still reflection rays to trace
                 {
                     struct vec3 rcol;    //holds the output of the reflection ray calculcation
@@ -566,6 +519,7 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
                     ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
                     
             raysTraced++;       //one pixel-post-ray-trace data has been stored!
+	    if (raysTraced == numOpsPerCore) return;  //return if total rays per core have been traced
         }
     }
 }
@@ -576,14 +530,19 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
  * shade() to calculate reflection rays if necessary).
  */
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
+//    printf("beginning of trace success!\n");
     struct vec3 col;
     struct spoint sp, nearest_sp;
-    double *nearest_obj = (double *)malloc(9*sizeof(double));
+//    double *nearest_obj = (double *)malloc(9*sizeof(double));
+ 
+    double nearest_obj[9];
 
     int iterCount = 0; 
 
-    double *flat_sphere = (double *)malloc(9*sizeof(double));
-    get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
+ //   double *flat_sphere = (double *)malloc(9*sizeof(double));
+    double flat_sphere[9]; 
+	
+    get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere); // populates flat_sphere
 
     /* if we reached the recursion limit, bail out */
     if(depth >= MAX_RAY_DEPTH) {
@@ -591,25 +550,31 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
         return col;
     }
     
+    int i;	
     /* find the nearest intersection ... */
     while(flat_sphere) {
         if(ray_sphere(flat_sphere, ray, &sp)) {
             if(!nearest_obj || sp.dist < nearest_sp.dist) {
-                nearest_obj = flat_sphere;
+		for (i=0; i<9; i++)
+		{
+			nearest_obj[i] = flat_sphere[i];
+		}
                 nearest_sp = sp;
             }
         }
         iterCount++;
-        get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount);
+        get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere);
     }
 
     /* and perform shading calculations as needed by calling shade() */
     if(nearest_obj) {
-	 printf("every part of trace up to shade success!\n");
+//	 printf("every part of trace up to shade success!\n");
         col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata, obj_list_flat_dev);
     } else {
         col.x = col.y = col.z = 0.0;
     }
+
+
 
     return col;
 }
@@ -628,8 +593,9 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         struct vec3 ldir;
         struct ray shadow_ray;
 
-        double *flat_sphere = (double *)malloc(9*sizeof(double));
-        get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount); // populates flat_sphere
+//        double *flat_sphere = (double *)malloc(9*sizeof(double));
+	double flat_sphere[9];
+        get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere); // populates flat_sphere
 
         int in_shadow = 0;
 
@@ -647,7 +613,7 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
                 break;
             }
             iterCount++;
-            get_ith_sphere(flat_sphere, obj_list_flat_dev, iterCount);
+            get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere);
         }
 
         /* and if we're not in shadow, calculate direct illumination with the phong model. */
@@ -924,7 +890,7 @@ void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCou
     }
 }
 
-__device__ void get_ith_sphere(double *flat_sphere, double *obj_list_flat, int index) {
+__device__ void get_ith_sphere(double *obj_list_flat, int index, double *flat_sphere) {
     int base_index = index * 9;
 
     for (int i = 0; i <= 9; i++) {

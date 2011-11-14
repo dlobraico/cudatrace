@@ -2,5 +2,6 @@ cudatrace
 cudatrace-1Darray
 cudatrace.c
 tags
-scene.jpg
 *.dSYM
+*.jpg
+*.ppm
