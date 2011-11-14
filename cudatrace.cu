@@ -399,6 +399,40 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 	cudaMalloc((void**)&obj_list_flat_dev, (sizeof(double)*objCounter*9));
 	
 	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
+
+
+//lights and camera and whatnot
+
+    int lnumdev = 0;
+    struct camera camdev;
+
+    struct vec3 *lightsdev = 0;
+
+    cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3));
+
+    cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice);
+
+        lnumdev = lnum; //remember to pass lnumdev into render2!
+        camdev = cam;   //remember to pass camdev into render2!
+
+
+
+//urand and whatnot
+    struct vec3 *uranddev = 0;
+
+    cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3));
+
+    cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+
+
+//irand and whatnot
+
+    int *iranddev = 0;
+
+    cudaMalloc((void **)&iranddev, NRAN*sizeof(int));
+
+    cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+
     
     //FUNCTION TIEM
     render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
