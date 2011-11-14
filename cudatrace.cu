@@ -534,7 +534,7 @@ __global__ void render2(u_int32_t **fbDevice, struct parallelPixels *pixelsPerCo
 /* trace a ray throught the scene recursively (the recursion happens through                
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
     double nearest_obj[9];
@@ -578,7 +578,7 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
 /* Calculates direct illumination with the phong reflectance model.
  * Also handles reflections by calling trace again, if necessary.
  */
-__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev) {
+__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
     int i;
     struct vec3 col = {0, 0, 0};
     int iterCount = 0;
