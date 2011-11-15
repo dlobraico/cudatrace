@@ -38,12 +38,44 @@ typedef unsigned __int8 uint8_t;
 typedef unsigned __int32 uint32_t;
 #endif
 
+
+
+#include <stdio.h>
+
+#define cudaErrorCheck(call) { cudaAssert(call,__FILE__,__LINE__); }
+
+void cudaAssert(const cudaError err, const char *file, const int line)
+{ 
+    if( cudaSuccess != err) {                                                
+        fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",        
+                file, line, cudaGetErrorString(err) );
+        exit(1);
+    } 
+}
+
+
+
 int objCounter = 0;
 
 struct parallelPixels { //STRUCT WHICH DIVIDES PIXELS FOR RENDER2 GLOBAL FUNCTION TO USE
     signed int start[1];
     signed int end[1];
 };
+
+
+struct intss {
+	u_int32_t one;
+	u_int32_t two;
+	u_int32_t three;
+	u_int32_t four;
+	u_int32_t five;
+	u_int32_t six;
+	u_int32_t seven;
+	u_int32_t eight;
+	u_int32_t nine;
+	u_int32_t ten;
+};
+    
 
 struct vec3 {
     double x;
@@ -85,7 +117,7 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev); //SPECIFY ARGUMENTS TO RENDER2~!!!!
+__global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev); //SPECIFY ARGUMENTS TO RENDER2~!!!!
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
 __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
@@ -244,22 +276,7 @@ int main(int argc, char **argv) {
     yresdev = yres;
     aspectdev = aspect;
 
-    //I'M NOT GOING TO COPY OVER OBJ_LIST BECAUSE I THINK OBJ_LISTDEV CAN BE DIRECTLY SENT TO THE DEVICE MEMORY! I HAVEN'T IMPLEMENTED THIS YET, THOUGH..
 
-    //cuda memcopy could also work here
- //   for(i=0; i<MAX_LIGHTS; i++) {
- //       lightsdev[i] = lights[i];
- //       lnumdev = lnum;
- //       camdev = cam;
- //   }
-    //cuda memcopy could also work here
- //   for(i=0; i<NRAN; i++) {
- //      uranddev[i]= urand[i];
- //   }
-    //cuda memcopy could also work here
-//    for(i=0; i<NRAN; i++) {
- //      iranddev[i] = irand[i]; 
- //   }
 
     
     start_time = get_msec();
@@ -287,7 +304,7 @@ int main(int argc, char **argv) {
 void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 {
 
-    int num_elementsParallelPixel = 3; //there will be an array of three structs which each determine the pixel one core will begin tracing at and the pixel it will end tracing at(x and y values)
+    int num_elementsParallelPixel = 4; //there will be an array of three structs which each determine the pixel one core will begin tracing at and the pixel it will end tracing at(x and y values)
  
     int block_size = 3;              //3 * 1 = total number of cores
     int grid_size = 1;
@@ -303,11 +320,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     host_pixelspercore = (struct parallelPixels*)malloc(num_bytes_ParallelPixel); 
 
     // cudaMalloc a device array
-    if (cudaSuccess!=(cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel)))
-	{
-		printf("cudaMallocpixels failed\n");
-		exit(1);
-	} 
+    cudaErrorCheck( cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel) );
 
 		printf("cudaMalloc pixels success!\n");
     
@@ -320,10 +333,9 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //Additionally, each device has only -one- index to this array, based on what number core it is!(grid number * block number * something else which uniquely identifies each core)
 //This means that each core can only save one element into the frame buffer array which won't get overwritten by another core!
 //So, what do we do?
-//Well, we could choose to send a special 2D array to the devices, which allows no outdata to get overwritten!
-//Then, we could transfer this 2D array to a host 2D array.
-//Finally, we could loop through all of the output in the 2D array and sequentially put it into a regular 1D array(the REAL frame buffer). ***Ah, did someone say "sequentially"? Is this an area which could possibly be made parallel as well?**
-//Yup, that's it. You've just read through the most inefficient idea ever.  
+//Well, we could choose to send a array of struct of 4 u_int32_t's to the devices, which allows no outdata to get overwritten!
+//Then, we could transfer this struct array to a host array.
+//Finally, we could loop through all of the output in the struct array and sequentially put it into a regular u_int32_t array(the REAL frame buffer). ***Ah, did someone say "sequentially"? Is this an area which could possibly be made parallel as well?**
 
   
 
@@ -337,16 +349,18 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //http://forums.nvidia.com/index.php?s=5712c99a6838532e8e43081108fce9f8&showtopic=69403&st=20
 // AND http://pleasemakeanote.blogspot.com/2008/06/2d-arrays-in-c-using-malloc.html
 
-    u_int32_t *device_fb = 0;
-    u_int32_t *host_fb = 0;
+    struct intss *device_fb = 0;
+    struct intss *host_fb = 0;
 
     //Special host 2D array is created(malloced)
     
     // Now to create the special device 2D Array
- 	   
-	cudaMalloc((void **)&device_fb, (block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t));
-	host_fb = (u_int32_t*)malloc((block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t)); 
 
+       int num_bytes_fb = (block_size*grid_size)*sizeof(struct intss);
+ 	   
+
+	host_fb = (struct intss*)malloc(num_bytes_fb); 
+	cudaErrorCheck(cudaMalloc((void **)&device_fb, num_bytes_fb) );
 
     printf("cudamalloc framebuffer and host buffer success!\n");
 
@@ -381,20 +395,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
                 dataPerCore = 0; //reset counter if entire core data has been stored
         }
     }
-    //if there are any cores which will not be doing any operations, start and end values will be set to -1
-    //each core/thread will have to check if any of the given values are -1. if this is the case, they should immediately return.
-    if ((totalOps/numOpsPerCore) < (block_size*grid_size))
-    {
-        int emptyCores = (block_size*grid_size) - (totalOps/numOpsPerCore); //total number of cores - cores used
-        for (int k = 0; k < emptyCores; k++) // for every empty core left, continue to add -1s to the pixelspercore struct
-        {
-            host_pixelspercore[completeCore].start[0] = -1;
-            host_pixelspercore[completeCore].start[1] = -1;
-            host_pixelspercore[completeCore].end[0] = -1;
-            host_pixelspercore[completeCore].end[1] = -1;
-            completeCore++; //one entire core data completed/stored
-        }
-    }
+
 
     printf("parallelpixel data transfer success!\n");
     //copy over host array which determines which pixels should have rays traced per core to device array
@@ -409,9 +410,9 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
     //create obj_list_flat_dev array size of objCounter
-	cudaMalloc((void **)&obj_list_flat_dev, (sizeof(double) *objCounter*9));
+	cudaErrorCheck( cudaMalloc((void **)&obj_list_flat_dev, (sizeof(double) *objCounter*9)) );
 	
-	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double) *objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
+	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, (sizeof(double) *objCounter*9), cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
     
 
     printf("obj_list_flat_dev memcopy and malloc success!\n");
@@ -424,7 +425,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 	struct vec3 *lightsdev = 0;
 
-	cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3));
+	cudaErrorCheck(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)) );
 
 	cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice);
 
@@ -436,7 +437,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //urand and whatnot
 	struct vec3 *uranddev = 0;
 
-	cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3));
+	cudaErrorCheck(cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3)) );
 
 	cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
 
@@ -445,7 +446,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 	int *iranddev = 0;
 
-	cudaMalloc((void **)&iranddev, NRAN*sizeof(int));
+	cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
 
 	cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
 
@@ -462,60 +463,77 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
 
-    //FUNCTION TIEM
-    render2<<<block_size,grid_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
+    render2<<<grid_size,block_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
+    cudaPeekAtLastError(); // Checks for launch error
+    cudaErrorCheck( cudaThreadSynchronize() );
+
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
 
-    //check_cuda_errors(debug_errors, 732)//GIVEN line number of  FUNCTION WE WISH TO TEST!);    //debugging support (see notes)
+
     //once done, copy contents of device array to host array  
 
 
 
 
 
-    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*numOpsPerCore*sizeof(u_int32_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(host_fb, device_fb, num_bytes_fb, cudaMemcpyDeviceToHost);
+
+
+    printf("output %d ", host_fb[0].one);
+
+    printf("output %d ", host_fb[1].one);
+
+    printf("output %d ", host_fb[2].one);
+
+
+
+
 
   
 
-    //THIS QUITE POSSIBLY DOESN'T HAVE TO BE HERE ANYMORE! HOST_FB CAN TURN INTO FB[]!  
-    int fbCounter = 0;
-    for(int c=0; c < (block_size*grid_size);c++)
-    {//for each core
-        if (fbCounter == totalOps)  //if total amount of pixels have been stored, stop computing through loop 
-            break;
-        for (int c2=0; c2<numOpsPerCore; c2++)
-        {//and for each pixel which had a ray traced per a given core...
-            fb[fbCounter] = host_fb[(c*numOpsPerCore)+c2]; //one piece of pixel data is stored into frame buffer
-            fbCounter++;                    //frame buffer array increases
-        }   
-    }   
-    //free host and device pixelspercore 
+
 
     free(host_pixelspercore);  
-    cudaFree(device_fb);
+    cudaErrorCheck( cudaFree(device_fb) );
     free(host_fb); 	
-    cudaFree(obj_list_flat_dev);
-    cudaFree(device_pixelspercore);
+    cudaErrorCheck( cudaFree(obj_list_flat_dev) );
+    cudaErrorCheck( cudaFree(device_pixelspercore) );
     
  
     
 }   
 
 
-__global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev)            //SPECIFY ARGUMENTS!!!
+__global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev)            //SPECIFY ARGUMENTS!!!
 {
     int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
 //    printf("index success!\n");	
+
+      device_fb[index].one = index;
+
+
+
+    u_int32_t answer;
     int s;
     int i = pixelsPerCore[index].start[0];   //x value of first pixel 
 //    printf("x value success!\n");	
-    int c;
+
+
+
+
     if (i==-1) 
     {
-	for (c=0; c<numOpsPerCore; c++)
-	{
-	            fbDevice[index*numOpsPerCore+c] = (u_int32_t)0;
-	}
+	            device_fb[index].one   = (u_int32_t)0;
+	            device_fb[index].two   = (u_int32_t)0;
+	            device_fb[index].three = (u_int32_t)0;
+	            device_fb[index].four  = (u_int32_t)0;
+	            device_fb[index].five  = (u_int32_t)0;
+	            device_fb[index].six   = (u_int32_t)0;
+	            device_fb[index].seven = (u_int32_t)0;
+	            device_fb[index].eight = (u_int32_t)0;
+	            device_fb[index].nine  = (u_int32_t)0;
+	            device_fb[index].ten   = (u_int32_t)0;
+	return;
      }                       //if a -1 value is placed in the start value, then there is no pertinent data here. return early. Note that this will not decrease speed of parallel operations, since the speed is determined by the slowest parallel operation..
     int j = pixelsPerCore[index].start[1];   //y value of first pixel
 //    printf("y value success!\n");
@@ -535,8 +553,8 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
      * put it into the framebuffer.
      * XXX: assumes contiguous scanlines with NO padding, and 32bit pixels.
      */
-    for(j=0; j<=ysz; j++) {
-        for(i=0; i<=xsz; i++) {
+    for(j; j<=ysz; j++) {
+        for(i; i<=xsz; i++) {
             double r, g, b;
             r = g = b = 0.0;
             
@@ -559,15 +577,22 @@ __global__ void render2(u_int32_t *fbDevice, struct parallelPixels *pixelsPerCor
             r = r * rcp_samples;
             g = g * rcp_samples;
             b = b * rcp_samples;
-                
-            fbDevice[index*numOpsPerCore+raysTraced] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
-                    ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-                    ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+            
+
+      answer =  (((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
+                        ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+                        ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT);
+
+
+
+
                     
+            device_fb[index].one = answer; 
             raysTraced++;       //one pixel-post-ray-trace data has been stored!
 	    if (raysTraced == numOpsPerCore) return;  //return if total rays per core have been traced
         }
     }
+
 }
 
 
@@ -900,9 +925,9 @@ void load_scene(FILE *fp) {
 }
 
 void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
-    struct vec3 pos = obj_list->pos;
-    double rad = obj_list->rad;
-    struct material mat = obj_list->mat;
+    struct vec3 pos = sphere->pos;
+    double rad = sphere->rad;
+    struct material mat = sphere->mat;
 
     sphere_flat[0] = pos.x;
     sphere_flat[1] = pos.y;
@@ -918,16 +943,15 @@ void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter) {
     obj_list_flat = (double *)malloc(9*objCounter*sizeof(double));
 
-    double doubleCounter = objCounter*9;
 
-    for (int i = 0; i <= objCounter; i++) {
+    for (int i = 0; i < objCounter; i++) {
         struct sphere *sphere = obj_list;
         double sphere_flat[9];
         flatten_sphere(sphere, sphere_flat);
 
-        for (int j = 0; j <= doubleCounter; j++) {
-            for (int k = 0; k <= 9; k++) {
-                obj_list_flat[j] = sphere_flat[k];
+        for (int j = 0; j < objCounter; j++) {
+            for (int k = 0; k < 9; k++) {
+                obj_list_flat[9*j+k] = sphere_flat[k];
             }
         }
 
@@ -943,17 +967,7 @@ __device__ void get_ith_sphere(double *obj_list_flat, int index, double *flat_sp
         flat_sphere[i] = obj_list_flat[base_index + i]; 
     }
 
-    /*
-       single_sphere[0] = sphere->pos.x
-       single_sphere[1] = sphere->pos.y
-       single_sphere[2] = sphere->pos.z
-       single_sphere[3] = sphere->rad
-       single_sphere[4] = sphere->mat.col.x
-       single_sphere[5] = sphere->mat.col.y
-       single_sphere[6] = sphere->mat.col.z
-       single_sphere[7] = sphere->mat.spow
-       single_sphere[8] = sphere->mat.refl
-     */
+
 }
 
 
@@ -993,4 +1007,6 @@ unsigned long get_msec(void) {
 #else
 #error "I don't know how to measure time on your platform"
 #endif
+
+
 

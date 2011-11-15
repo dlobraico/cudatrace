@@ -342,7 +342,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         cudasafe(cudaMalloc((void **)&host_fb[i], numOpsPerCore*sizeof(u_int32_t)), "cudaMalloc host_fb");
     }
 
-    cudasafe(cudaMemcpy(device_fb, host_fb, numOpsPerCore*(block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy");
+    cudasafe(cudaMemcpy(device_fb, host_fb, numOpsPerCore*(block_size*grid_size)*sizeof(u_int32_t*), cudaMemcpyHostToDevice), "cudaMemcpy: fb host to device");
 
     //PUT DATA INTO PARALLEL PIXEL STRUCT PIXELSPERCORE!!
 
@@ -389,16 +389,16 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         }
     }
     //copy over host array which determines which pixels should have rays traced per core to device array
-    cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice);
+    cudasafe(cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice), "cudaMemcpy: pixelspercore");
 
     flatten_obj_list(obj_list, obj_list_flat, objCounter);
 
     double *obj_list_flat_dev = 0;
 
     //create obj_list_flat_dev array size of objCounter
-	cudaMalloc((void**)&obj_list_flat_dev, (sizeof(double)*objCounter*9));
+	cudasafe(cudaMalloc((void**)&obj_list_flat_dev, (sizeof(double)*objCounter*9)), "cudaMalloc");
 	
-	cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice); //copying over flat sphere array to obj_listdevflat
+	cudasafe(cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice), "cudaMemcpy: obj_list_flat"); //copying over flat sphere array to obj_listdevflat
 
 
 //lights and camera and whatnot
@@ -408,9 +408,9 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     struct vec3 *lightsdev = 0;
 
-    cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3));
+    cudasafe(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)), "cudaMalloc");
 
-    cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice);
+    cudasafe(cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice), "cudaMemcpy: lights");
 
         lnumdev = lnum; //remember to pass lnumdev into render2!
         camdev = cam;   //remember to pass camdev into render2!
@@ -420,18 +420,18 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 //urand and whatnot
     struct vec3 *uranddev = 0;
 
-    cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3));
+    cudasafe(cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3)), "cudaMalloc");
 
-    cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+    cudasafe(cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice), "cudaMemcpy: urand"); //remember to pass all of these into render2!!
 
 
 //irand and whatnot
 
     int *iranddev = 0;
 
-    cudaMalloc((void **)&iranddev, NRAN*sizeof(int));
+    cudasafe(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)), "cudaMalloc");
 
-    cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice); //remember to pass all of these into render2!!
+    cudasafe(cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice),"cudaMemcpy: irand"); //remember to pass all of these into render2!!
 
     
     //FUNCTION TIEM
@@ -444,8 +444,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //then, copy host_fb contents to THE REAL frame buffer array so that everything is in order...
     
     int fbCounter = 0;
-    for(int c=0; c < (block_size*grid_size);c++)
-    {//for each core
+    for(int c=0; c < (block_size*grid_size);c++) {//for each core
         if (fbCounter == totalOps)  //if total amount of pixels have been stored, stop computing through loop 
             break;
         for (int c2=0; c2<numOpsPerCore; c2++)
@@ -461,7 +460,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaFree(device_pixelspercore);
     
     //free host and device fb 2D arrays
-    cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*sizeof(void *), cudaMemcpyDeviceToHost);
+    cudasafe(cudaMemcpy(host_fb, device_fb, (block_size*grid_size)*sizeof(void *), cudaMemcpyDeviceToHost), "cudaMemcpy: device to host fb");
 
     for (int i=0; i<(block_size*grid_size); i++)
     {
