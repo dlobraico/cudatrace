@@ -398,7 +398,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //create obj_list_flat_dev array size of objCounter
 	cudasafe(cudaMalloc((void**)&obj_list_flat_dev, (sizeof(double)*objCounter*9)), "cudaMalloc");
 	
-	cudasafe(cudaMemcpy(&obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice), "cudaMemcpy: obj_list_flat"); //copying over flat sphere array to obj_listdevflat
+	cudasafe(cudaMemcpy(obj_list_flat_dev, &obj_list_flat, sizeof(double)*objCounter*9, cudaMemcpyHostToDevice), "cudaMemcpy: obj_list_flat"); //copying over flat sphere array to obj_listdevflat
 
 
 //lights and camera and whatnot
@@ -410,7 +410,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     cudasafe(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)), "cudaMalloc");
 
-    cudasafe(cudaMemcpy(&lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice), "cudaMemcpy: lights");
+    cudasafe(cudaMemcpy(lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice), "cudaMemcpy: lights");
 
         lnumdev = lnum; //remember to pass lnumdev into render2!
         camdev = cam;   //remember to pass camdev into render2!
@@ -422,7 +422,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     cudasafe(cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3)), "cudaMalloc");
 
-    cudasafe(cudaMemcpy(&uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice), "cudaMemcpy: urand"); //remember to pass all of these into render2!!
+    cudasafe(cudaMemcpy(uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice), "cudaMemcpy: urand"); //remember to pass all of these into render2!!
 
 
 //irand and whatnot
@@ -431,7 +431,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     cudasafe(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)), "cudaMalloc");
 
-    cudasafe(cudaMemcpy(&iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice),"cudaMemcpy: irand"); //remember to pass all of these into render2!!
+    cudasafe(cudaMemcpy(iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice),"cudaMemcpy: irand"); //remember to pass all of these into render2!!
 
     
     //FUNCTION TIEM
