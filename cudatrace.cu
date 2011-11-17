@@ -103,7 +103,7 @@ struct camera {
     double fov;
 };
 
-void render1(int xsz, int ysz, u_int32_t *fb, int samples);
+void render1(int xsz, int ysz, u_int32_t **fb, int samples);
 __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_flat, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev, int xsz, int ysz); //SPECIFY ARGUMENTS TO RENDER2~!!!!
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *objCounterdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
 __device__ struct vec3 shade(struct validsphere obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
@@ -190,9 +190,9 @@ const char *usage = {
 
 
 int main(int argc, char **argv) {
-    int i;
+    int i, j;
     unsigned long rend_time, start_time;
-    u_int32_t *pixels;
+    u_int32_t **pixels;
     int rays_per_pixel = 1;
     FILE *infile = stdin, *outfile = stdout;
 
@@ -248,7 +248,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof(*pixels)))) {
+    if(!(pixels = (u_int32_t **)malloc(xres * yres * sizeof(u_int32_t)))) {
         perror("pixel buffer allocation failed");
         return EXIT_FAILURE;
     }
@@ -272,10 +272,12 @@ int main(int argc, char **argv) {
 
     /* output the image */
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
-    for(i=0; i<xres * yres; i++) {
-        fputc((pixels[i] >> RSHIFT) & 0xff, outfile);
-        fputc((pixels[i] >> GSHIFT) & 0xff, outfile);
-        fputc((pixels[i] >> BSHIFT) & 0xff, outfile);
+    for(i=0; i<xres; i++) {
+        for(j=0; j<yres; j++) {
+            fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
+            fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
+            fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
+        }
     }
     fflush(outfile);
 
@@ -285,7 +287,7 @@ int main(int argc, char **argv) {
 }
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-void render1(int xsz, int ysz, u_int32_t *fb, int samples)
+void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 {
     dim3 threads_per_block(8, 8);
 
@@ -310,15 +312,15 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
 
-    printf("num_blocks_x: %i\n", num_blocks_x);
-    printf("num_blocks_y: %i\n", num_blocks_y);
+    //printf("num_blocks_x: %i\n", num_blocks_x);
+    //printf("num_blocks_y: %i\n", num_blocks_y);
     
     u_int32_t **device_fb = 0;
-    u_int32_t **host_fb = 0;
+    //u_int32_t **host_fb = 0;
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
-    host_fb = (u_int32_t **)malloc(arr_size);
+    //host_fb = (u_int32_t **)malloc(arr_size);
 
     cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
@@ -366,12 +368,12 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    printf("host_fb[0][0]: %u\n", host_fb[0][0]);
-    printf("host_fb[500][200]: %u\n", host_fb[500][200]);
-    printf("host_fb[243][128]: %u\n", host_fb[243][128]);
-    printf("lights 0x: %f\n", lights[0].x);
-    printf("lights 0y: %f\n", lights[0].y);
-    printf("lights 0z: %f\n", lights[0].z);
+    //printf("host_fb[0][0]: %u\n", host_fb[0][0]);
+    //printf("host_fb[500][200]: %u\n", host_fb[500][200]);
+    //printf("host_fb[243][128]: %u\n", host_fb[243][128]);
+    //printf("lights 0x: %f\n", lights[0].x);
+    //printf("lights 0y: %f\n", lights[0].y);
+    //printf("lights 0z: %f\n", lights[0].z);
 
     cudaErrorCheck( cudaFree(device_fb) );
     free(host_fb); 	
