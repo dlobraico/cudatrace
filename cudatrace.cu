@@ -259,7 +259,6 @@ int main(int argc, char **argv) {
     start_time = get_msec();
     render1(xres, yres, pixels, rays_per_pixel);
     rend_time = get_msec() - start_time;
-    printf("pixels[0][0]: %u", pixels[0][0] );
 
     /* output statistics to stderr */
     fprintf(stderr, "Rendering took: %lu seconds (%lu milliseconds)\n", rend_time / 1000, rend_time);
@@ -317,7 +316,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
-    //host_fb = (u_int32_t **)malloc(arr_size);
+    host_fb = (u_int32_t **)malloc(arr_size);
 
     cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
