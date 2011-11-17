@@ -309,12 +309,13 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
     
-    u_int32_t **device_fb = 0;
-    //u_int32_t **host_fb = 0;
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
+    //u_int32_t **host_fb = 0;
+    //host_fb = (u_int32_t **)malloc((xsz*ysz*sizeof(u_int32_t*)));
+
+    u_int32_t **device_fb = 0;
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
-    host_fb = (u_int32_t **)malloc((xsz*ysz*sizeof(u_int32_t*)));
 
     cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
