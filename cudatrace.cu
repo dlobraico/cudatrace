@@ -267,9 +267,9 @@ int main(int argc, char **argv) {
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
     for(i=0; i<yres; i++) {
         for(j=0; j<xres; j++) {
-            fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
         }
     }
     fflush(outfile);
