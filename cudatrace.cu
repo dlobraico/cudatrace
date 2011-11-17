@@ -96,8 +96,8 @@ struct camera {
     double fov;
 };
 
-void render1(int xsz, int ysz, u_int32_t **fb, int samples);
-__global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_flat, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev, int xsz, int ysz); //SPECIFY ARGUMENTS TO RENDER2~!!!!
+void render1(int xsz, int ysz, u_int32_t *fb, int samples);
+__global__ void render2(u_int32_t *device_fb, int samples, double *obj_list_flat, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev, int xsz, int ysz); //SPECIFY ARGUMENTS TO RENDER2~!!!!
 __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *objCounterdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
 __device__ struct vec3 shade(struct validsphere obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
@@ -185,7 +185,7 @@ const char *usage = {
 int main(int argc, char **argv) {
     int i, j;
     unsigned long rend_time, start_time;
-    u_int32_t **pixels;
+    u_int32_t *pixels;
     int rays_per_pixel = 1;
     FILE *infile = stdin, *outfile = stdout;
 
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(!(pixels = (u_int32_t **)malloc(xres * yres * sizeof(u_int32_t*)))) {
+    if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof(u_int32_t)))) {
         perror("pixel buffer allocation failed");
         return EXIT_FAILURE;
     }
@@ -267,9 +267,9 @@ int main(int argc, char **argv) {
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
     for(i=0; i<yres; i++) {
         for(j=0; j<xres; j++) {
-            fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(int)*j] >> RSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(int)*j] >> GSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(int)*j] >> BSHIFT) & 0xff, outfile);
         }
     }
     fflush(outfile);
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
 }
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
+void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 {
     dim3 threads_per_block(16, 16);
 
@@ -311,12 +311,8 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
-    //u_int32_t **host_fb = 0;
-    //host_fb = (u_int32_t **)malloc((xsz*ysz*sizeof(u_int32_t*)));
-
-    u_int32_t **device_fb = 0;
+    u_int32_t *device_fb = 0;
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
-
     cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
     double *obj_list_flat_dev = 0;
@@ -372,7 +368,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 }   
 
 
-__global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_flat_dev, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev, int xsz, int ysz)            //SPECIFY ARGUMENTS!!!
+__global__ void render2(u_int32_t *device_fb, int samples, double *obj_list_flat_dev, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev, int xsz, int ysz)            //SPECIFY ARGUMENTS!!!
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -416,7 +412,7 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
     b = b * rcp_samples;
 
 
-    device_fb[i][j] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
+    device_fb[i + sizeof(u_int32_t)*j] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
                       ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
                       ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
