@@ -303,7 +303,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
         extra_block_y = 1;
     }
 
-    int num_blocks_x = whole_blocks_x + extra_block_x;
+    int num_blocks_x = whole_blocks_x //+ extra_block_x;
     int num_blocks_y = whole_blocks_y + extra_block_y;
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
