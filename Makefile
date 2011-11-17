@@ -1,6 +1,6 @@
-obj = cudatrace-1Darray.o
-bin = cudatrace-1Darray
-src = cudatrace-1Darray.cu
+obj = cudatrace.o
+bin = cudatrace
+src = cudatrace.cu
 
 CC = nvcc
 CFLAGS = -g -G -O0 -arch sm_12 -lm -lpthread -m64
