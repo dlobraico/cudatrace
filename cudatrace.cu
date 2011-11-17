@@ -259,6 +259,7 @@ int main(int argc, char **argv) {
     start_time = get_msec();
     render1(xres, yres, pixels, rays_per_pixel);
     rend_time = get_msec() - start_time;
+    printf("pixels[0][0]: %u", pixels[0][0] );
 
     /* output statistics to stderr */
     fprintf(stderr, "Rendering took: %lu seconds (%lu milliseconds)\n", rend_time / 1000, rend_time);
