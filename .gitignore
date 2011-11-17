@@ -1,6 +1,7 @@
 cudatrace
 cudatrace-1Darray
 cudatrace.c
+1Dcudatrace.c
 tags
 *.dSYM
 *.jpg
