@@ -267,9 +267,9 @@ int main(int argc, char **argv) {
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
     for(i=0; i<yres; i++) {
         for(j=0; j<xres; j++) {
-            fputc((pixels[i + sizeof(int)*j] >> RSHIFT) & 0xff, outfile);
-            fputc((pixels[i + sizeof(int)*j] >> GSHIFT) & 0xff, outfile);
-            fputc((pixels[i + sizeof(int)*j] >> BSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(u_int32_t)*j] >> RSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(u_int32_t)*j] >> GSHIFT) & 0xff, outfile);
+            fputc((pixels[i + sizeof(u_int32_t)*j] >> BSHIFT) & 0xff, outfile);
         }
     }
     fflush(outfile);
@@ -413,8 +413,8 @@ __global__ void render2(u_int32_t *device_fb, int samples, double *obj_list_flat
 
 
     device_fb[i + sizeof(u_int32_t)*j] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
-                      ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-                      ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+                                         ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+                                         ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
     return;
     }
