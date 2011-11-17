@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(!(pixels = (u_int32_t **)malloc(xres * yres * sizeof(u_int32_t)))) {
+    if(!(pixels = (u_int32_t **)malloc(xres * yres * sizeof(u_int32_t*)))) {
         perror("pixel buffer allocation failed");
         return EXIT_FAILURE;
     }
