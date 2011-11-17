@@ -51,13 +51,6 @@ void cudaAssert(const cudaError err, const char *file, const int line)
 
 int objCounter = 0;
 
-
-struct parallelPixels { //STRUCT WHICH DIVIDES PIXELS FOR RENDER2 GLOBAL FUNCTION TO USE
-    signed int start[1];
-    signed int end[1];
-};
-
-
 struct validsphere {
     double sph[9];
     int null;
@@ -283,6 +276,9 @@ int main(int argc, char **argv) {
 
     if(infile != stdin) fclose(infile);
     if(outfile != stdout) fclose(outfile);
+
+    free(pixels);
+
     return 0;
 }
 
@@ -376,7 +372,6 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     //printf("lights 0z: %f\n", lights[0].z);
 
     cudaErrorCheck( cudaFree(device_fb) );
-    free(host_fb); 	
     cudaErrorCheck( cudaFree(obj_list_flat_dev) );
 }   
 
@@ -388,7 +383,7 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
 
     if (i >= xsz || j >= ysz) {
         return;
-    }
+    } else {
 
     int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
     isReflect[0] = 0;
@@ -430,6 +425,7 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
                       ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
     return;
+    }
 }
 
 
