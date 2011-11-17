@@ -359,7 +359,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
 
-    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, xsz*ysz*sizeof(u_int32_t*), cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
     free(obj_list_flat);
