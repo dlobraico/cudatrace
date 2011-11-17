@@ -312,7 +312,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     printf("num_blocks_y: %i\n", num_blocks_y);
     
     u_int32_t **device_fb = 0;
-    u_int32_t **host_fb = 0;
+    //u_int32_t **host_fb = 0;
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
