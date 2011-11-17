@@ -12,6 +12,14 @@ $(bin): $(src)
 test:
 	./$(bin) -i c-ray-1.1/scene -o scene.ppm
 
+.PHONY: memcheck
+memcheck:
+	cuda-memcheck ./$(bin) -i c-ray-1.1/scene -o scene.ppm
+
+.PHONY: cuda-gdb
+cuda-gdb:
+	cuda-gdb ./$(bin) -i c-ray-1.1/scene -o scene.ppm
+
 .PHONY: clean
 clean:
 	rm -f $(obj) $(bin)

@@ -51,6 +51,7 @@ void cudaAssert(const cudaError err, const char *file, const int line)
 
 int objCounter = 0;
 
+
 struct parallelPixels { //STRUCT WHICH DIVIDES PIXELS FOR RENDER2 GLOBAL FUNCTION TO USE
     signed int start[1];
     signed int end[1];
@@ -68,6 +69,11 @@ struct intss {
     u_int32_t eight;
     u_int32_t nine;
     u_int32_t ten;
+};
+
+struct validsphere {
+	double sph[9];
+	int null;
 };
 
 
@@ -111,9 +117,9 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev); //SPECIFY ARGUMENTS TO RENDER2~!!!!
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
-__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
+__global__ void render2(struct intss *device_fb, int *pixelsPerCore, int samples, double *obj_list_flat, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev); //SPECIFY ARGUMENTS TO RENDER2~!!!!
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *objCounterdev); //two arguments added - one to check if a reflection ray must be made, the other to provide the arguments necessary for the reflection ray
+__device__ struct vec3 shade(struct validsphere obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
 __device__ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struct vec3 *uranddev, int *iranddev);
@@ -291,24 +297,53 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+__device__ int test_function(void) {
+        struct vec3 test_vec = {5,2,3};
+        struct material test_mat = {test_vec, 12.0, 75.0};
+        struct sphere *test_sphere = NULL;
+    
+        double arg1[9];
+        arg1[0] = 5;
+        arg1[1] = 2;
+        arg1[2] = 3;
+        arg1[3] = 17.0;
+ 		  arg1[4] = 5;
+        arg1[5] = 2;
+        arg1[6] = 3;
+		  arg1[7] = 12.0;
+		  arg1[8] = 75.0;
+		  
+        struct ray arg2;
+        arg2.orig = test_vec;
+        arg2.dir = test_vec;
+
+        struct spoint arg3[1];  
+        arg3->pos = test_vec; 
+        arg3->normal = test_vec; 
+        arg3->vref = test_vec; 
+        arg3->dist = 52.3; 
+
+        int testing = ray_sphere(arg1, arg2, arg3);
+        return testing;
+	}
+
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
 void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 {
-
-    int num_elementsParallelPixel = 4; //there will be an array of three structs which each determine the pixel one core will begin tracing at and the pixel it will end tracing at(x and y values)
-
-    int block_size = 1;              //3 * 1 = total number of cores
+    int block_size = 1;              //block_size * grid_size = total number of cores
     int grid_size = 1;
+
+    int num_elementsParallelPixel = block_size * grid_size; //there will be an array of n structs which each determine the pixel one core will begin tracing at and the pixel it will end tracing at(x and y values)
 
     int totalOps = xsz * ysz;       //total number of pixels to have rays traced to (x coord. multiplied by y coord.)
     int numOpsPerCore = totalOps/(block_size*grid_size);   // amount of rays to be traced by each core
 
-    int num_bytes_ParallelPixel = num_elementsParallelPixel * sizeof(struct parallelPixels);
-    struct parallelPixels *device_pixelspercore = 0;        //device array of pixels per core(sent to all of the cores)
-    struct parallelPixels *host_pixelspercore = 0;          //host array of pixels per core(only contained by host)
+    int num_bytes_ParallelPixel = num_elementsParallelPixel * sizeof(int);
+    int *device_pixelspercore = 0;        //device array of pixels per core(sent to all of the cores)
+    int *host_pixelspercore = 0;          //host array of pixels per core(only contained by host)
 
     // malloc a host array
-    host_pixelspercore = (struct parallelPixels*)malloc(num_bytes_ParallelPixel); 
+    host_pixelspercore = (int *)malloc(num_bytes_ParallelPixel); 
 
     // cudaMalloc a device array
     cudaErrorCheck( cudaMalloc((void**)&device_pixelspercore, num_bytes_ParallelPixel) );
@@ -345,7 +380,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
     host_fb = (struct intss*)malloc(num_bytes_fb); 
-    host_fb[0].one = 100; // REMOVE
+
     cudaErrorCheck( cudaMalloc((void **)&device_fb, num_bytes_fb) );
     cudaErrorCheck(cudaMemcpy(device_fb, host_fb, num_bytes_fb, cudaMemcpyHostToDevice));
 
@@ -356,7 +391,7 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     int completeCore = 0;   //representing how many cores have the max data stored
     int dataPerCore = 0;   //representing how much data is stored per core
 
-    int y, x;              //representing the x and y values of the pixels which are stored in the pixelspercore array
+    int x,y;              //representing the x and y values of the pixels which are stored in the pixelspercore array
 
     for (y=0; y<ysz; y++)
     {//for each y value, store every possible (x,y) coord into pixelspercore structs
@@ -364,14 +399,14 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         {//if there is no data yet in struct, then we must record the first (x,y) pixel which a given core will trace a ray to
             if (dataPerCore == 0)
             {
-                host_pixelspercore[completeCore].start[0] = x;
-                host_pixelspercore[completeCore].start[1] = y;
+                host_pixelspercore[completeCore+0] = x;
+                host_pixelspercore[completeCore+1] = y;
             }
 
             if (dataPerCore==(numOpsPerCore-1))
             {//If the maximum amount of pixels which can have rays traced per core are about to be stored/counted, record the last (x,y) pixel which a given core will trace a ray to in the struct
-                host_pixelspercore[completeCore].end[0] = x;
-                host_pixelspercore[completeCore].end[1] = y;
+                host_pixelspercore[completeCore+2] = x;
+                host_pixelspercore[completeCore+3] = y;
                 completeCore++;    //one entire core data completed/stored
             }
 
@@ -382,29 +417,46 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
         }
     }
 
+    host_pixelspercore[0] = 0;
+    host_pixelspercore[1] = 799;
+    host_pixelspercore[2] = 0;
+    host_pixelspercore[3] = 599;
+
     printf("parallelpixel data transfer success!\n");
     //copy over host array which determines which pixels should have rays traced per core to device array
+    printf("host_pixelspercore 0s0: %i\n", host_pixelspercore[0]);
+    printf("host_pixelspercore 0e0: %i\n", host_pixelspercore[1]);
+    printf("host_pixelspercore 0s1: %i\n", host_pixelspercore[2]);
+    printf("host_pixelspercore 0e1: %i\n", host_pixelspercore[3]);
     cudaErrorCheck(cudaMemcpy(device_pixelspercore, host_pixelspercore, num_bytes_ParallelPixel, cudaMemcpyHostToDevice));
     printf("pixelspercore memcopy success!\n");	
 
-    flatten_obj_list(obj_list,obj_list_flat,objCounter);
-    obj_list_flat = (double *)malloc(sizeof(double)*objCounter*9);
     double *obj_list_flat_dev = 0;
+    obj_list_flat = (double *)malloc(sizeof(double)*objCounter*9);
+    flatten_obj_list(obj_list,obj_list_flat,objCounter);
 
     //create obj_list_flat_dev array size of objCounter
     cudaErrorCheck(cudaMalloc((void **)&obj_list_flat_dev, (sizeof(double)*objCounter*9)) );
     cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, obj_list_flat, (sizeof(double)*objCounter*9), cudaMemcpyHostToDevice)); //copying over flat sphere array to obj_listdevflat
 
+	 int *objCounterdev = 0;
+    cudaErrorCheck(cudaMalloc((void**)&objCounterdev, sizeof(int)));
+    cudaErrorCheck( cudaMemcpy(objCounterdev, &objCounter, sizeof(int), cudaMemcpyHostToDevice) );
+
+    int testing=0;
+
+     cudaErrorCheck( cudaMemcpy(&testing, objCounterdev , sizeof(int), cudaMemcpyDeviceToHost) );
+	 printf("testing: %d\n", testing);
+
+
+
     printf("obj_list_flat_dev memcopy and malloc success!\n");
-    //printf("device_fb = %i , device_pixelspercore = %i , samples = %i, obj_list_flat_dev = %i\n", device_fb, device_pixelspercore, samples, obj_list_flat_dev);	
+    printf("device_fb = %i , device_pixelspercore = %i , samples = %i, obj_list_flat_dev = %i\n", device_fb, device_pixelspercore, samples, obj_list_flat_dev);	
 
     //lights and camera and whatnot
     int lnumdev = 0;
     struct camera camdev;
     struct vec3 *lightsdev = 0;
-    lights[0].x = 8; // REMOVE
-    lights[0].y = 54; // REMOVE
-    lights[0].z = 39; // REMOVE
 
     cudaErrorCheck(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)) );
     cudaErrorCheck(cudaMemcpy(lightsdev, lights, MAX_LIGHTS*sizeof(struct vec3), cudaMemcpyHostToDevice));
@@ -422,10 +474,13 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
 
+
+
     // KERNEL CALL!
-    render2<<<grid_size,block_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
+    render2<<<grid_size,block_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev, objCounterdev);
     cudaPeekAtLastError(); // Checks for launch error
     cudaErrorCheck( cudaThreadSynchronize() );
+
 
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
@@ -433,13 +488,16 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    printf("output: %d\n", host_fb[0].one);
-    printf("output: %d\n", host_fb[1].one);
-    printf("output: %d\n", host_fb[2].one);
-    printf("lights: %d\n", lights[0].x);
-    printf("lights: %d\n", lights[0].y);
-    printf("lights: %d\n", lights[0].z);
-    printf("lights: %d\n", lights[1]);
+    printf("host_fb 01: %u\n", host_fb[0].one);
+    printf("host_fb 02: %u\n", host_fb[0].two);
+    printf("host_fb 03: %u\n", host_fb[0].three);
+    printf("host_fb 08: %u\n", host_fb[0].eight);
+    printf("host_fb 09: %u\n", host_fb[0].nine);
+    printf("host_fb 10: %u\n", host_fb[0].ten);
+
+    printf("lights 0x: %f\n", lights[0].x);
+    printf("lights 0y: %f\n", lights[0].y);
+    printf("lights 0z: %f\n", lights[0].z);
 
     free(host_pixelspercore);  
     cudaErrorCheck( cudaFree(device_fb) );
@@ -449,19 +507,13 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 }   
 
 
-__global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev)            //SPECIFY ARGUMENTS!!!
+__global__ void render2(struct intss *device_fb, int *pixelsPerCore, int samples, double *obj_list_flat_dev, int numOpsPerCore, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *objCounterdev)            //SPECIFY ARGUMENTS!!!
 {
-    /*int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
-    //    printf("index success!\n");	
-
-    //device_fb[index].one = index;
+    int index = blockIdx.x * blockDim.x + threadIdx.x; //DETERMINING INDEX BASED ON WHICH THREAD IS CURRENTLY RUNNING
 
     u_int32_t answer;
     int s;
-    int i = pixelsPerCore[index].start[0];   //x value of first pixel 
-    //    printf("x value success!\n");	
-
-
+    int i = pixelsPerCore[index + 0];   //x value of first pixel 
 
 
     if (i==-1) 
@@ -478,12 +530,9 @@ __global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPe
           device_fb[index].ten   = (u_int32_t)0;
         return;
     }                       //if a -1 value is placed in the start value, then there is no pertinent data here. return early. Note that this will not decrease speed of parallel operations, since the speed is determined by the slowest parallel operation..
-    int j = pixelsPerCore[index].start[1];   //y value of first pixel
-    //    printf("y value success!\n");
-    int xsz = pixelsPerCore[index].end[0];   //x value of last pixel
-    //    printf("x last value success!\n");
-    int ysz = pixelsPerCore[index].end[1];   //y value of last pixel
-    //    printf("y last value success!\n");
+    int j = pixelsPerCore[index + 2];   //y value of first pixel
+    int xsz = pixelsPerCore[index + 1];   //x value of last pixel
+    int ysz = pixelsPerCore[index + 3];   //y value of last pixel
     int raysTraced = 0;                     // number of rays traced 
     int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
     isReflect[0] = 0;
@@ -491,23 +540,23 @@ __global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPe
 
     double rcp_samples = 1.0 / (double)samples;
 
-    * for each subpixel, trace a ray through the scene, accumulate the
-     * colors of the subpixels of each pixel, then pack the color and
-     * put it into the framebuffer.
-     * XXX: assumes contiguous scanlines with NO padding, and 32bit pixels.
-     *
+    // for each subpixel, trace a ray through the scene, accumulate the
+    // colors of the subpixels of each pixel, then pack the color and
+    // put it into the framebuffer.
+    // XXX: assumes contiguous scanlines with NO padding, and 32bit pixels. 
+
     for(j; j<=ysz; j++) {
         for(i; i<=xsz; i++) {
             double r, g, b;
             r = g = b = 0.0;
 
             for(s=0; s<samples; s++) {
-                struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), 0, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev);
+                struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), 0, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, objCounterdev);
                 //		  printf("trace success!\n");	
                 while (*isReflect)        //while there are still reflection rays to trace
                 {
                     struct vec3 rcol;    //holds the output of the reflection ray calculcation
-                    rcol = trace(RData->ray, RData->depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev);    //trace a reflection ray
+                    rcol = trace(RData->ray, RData->depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, objCounterdev);    //trace a reflection ray
                     col.x += rcol.x * RData->reflection;       //I really am unsure about the usage of pointers here..
                     col.y += rcol.y * RData->reflection;
                     col.z += rcol.z * RData->reflection;
@@ -522,30 +571,30 @@ __global__ void render2(struct intss *device_fb, struct parallelPixels *pixelsPe
             b = b * rcp_samples;
 
 
-            answer = (((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
+            answer = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
                      ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-                     ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT);
+                     ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
             device_fb[index].one = answer; 
             raysTraced++;       //one pixel-post-ray-trace data has been stored!
             if (raysTraced == numOpsPerCore) return;  //return if total rays per core have been traced
         }
     }
-
-*/
 }
 
 
 /* trace a ray throught the scene recursively (the recursion happens through                
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
+__device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev, int *objCounterdev) {
     //    printf("beginning of trace success!\n");
     struct vec3 col;
     struct spoint sp, nearest_sp;
     //    double *nearest_obj = (double *)malloc(9*sizeof(double));
 
-    double nearest_obj[9];
+    struct validsphere nearest_obj;
+    
+    nearest_obj.null = 0;
 
     int iterCount = 0; 
 
@@ -562,40 +611,43 @@ __device__ struct vec3 trace(struct ray ray, int depth, int *isReflect, struct r
 
     int i;	
     /* find the nearest intersection ... */
-    while(flat_sphere) {
+    
+    while(iterCount <= *objCounterdev) {
         if(ray_sphere(flat_sphere, ray, &sp)) {
-            if(!nearest_obj || sp.dist < nearest_sp.dist) {
+            if(!nearest_obj.null || sp.dist < nearest_sp.dist) {
                 for (i=0; i<9; i++)
                 {
-                    nearest_obj[i] = flat_sphere[i];
+                    nearest_obj.sph[i] = flat_sphere[i];
                 }
+                nearest_obj.null = 1;
                 nearest_sp = sp;
-            }
+          }
         }
         iterCount++;
         get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere);
+
     }
 
-    /* and perform shading calculations as needed by calling shade() */
-    if(nearest_obj) {
+    //and perform shading calculations as needed by calling shade() 
+    if(nearest_obj.null) {
         //	 printf("every part of trace up to shade success!\n");
         col = shade(nearest_obj, &nearest_sp, depth, isReflect, Rdata, obj_list_flat_dev, lnumdev, lightsdev);
     } else {
         col.x = col.y = col.z = 0.0;
     }
-
+    
     return col;
 }
 
 /* Calculates direct illumination with the phong reflectance model.
  * Also handles reflections by calling trace again, if necessary.
  */
-__device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
+__device__ struct vec3 shade(struct validsphere obj, struct spoint *sp, int depth, int *isReflect, struct reflectdata *Rdata, double *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev) {
     int i;
     struct vec3 col = {0, 0, 0};
     int iterCount = 0;
 
-    /* for all lights ... */
+    // for all lights ... 
     for(i=0; i<lnumdev; i++) {
         double ispec, idiff;
         struct vec3 ldir;
@@ -614,7 +666,7 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         shadow_ray.orig = sp->pos;
         shadow_ray.dir = ldir;
 
-        /* shoot shadow rays to determine if we have a line of sight with the light */
+        //shoot shadow rays to determine if we have a line of sight with the light 
         while(flat_sphere) {
             if(ray_sphere(flat_sphere, shadow_ray, 0)) {
                 in_shadow = 1;
@@ -624,24 +676,27 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
             get_ith_sphere(obj_list_flat_dev, iterCount, flat_sphere);
         }
 
-        /* and if we're not in shadow, calculate direct illumination with the phong model. */
+        //and if we're not in shadow, calculate direct illumination with the phong model. 
         if(!in_shadow) {
             NORMALIZE(ldir);
 
             idiff = MAX(DOT(sp->normal, ldir), 0.0);
-            ispec = obj[7] > 0.0 ? pow(MAX(DOT(sp->vref, ldir), 0.0), obj[7]) : 0.0;  // ASSUMING OBJ[7] = obj->mat.spow
+            ispec = obj.sph[7] > 0.0 ? pow(MAX(DOT(sp->vref, ldir), 0.0), obj.sph[7]) : 0.0;  // ASSUMING OBJ[7] = obj->mat.spow
 
-            col.x += idiff * obj[4] + ispec;      // assuming obj[4] = obj->mat.col.x
-            col.y += idiff * obj[5] + ispec;      // assuming obj[5] = obj->mat.col.y
-            col.z += idiff * obj[6] + ispec;   //assuming obj[6] = obj->may.col.z
+            col.x += idiff * obj.sph[4] + ispec;      // assuming obj[4] = obj->mat.col.x
+            col.y += idiff * obj.sph[5] + ispec;      // assuming obj[5] = obj->mat.col.y
+            col.z += idiff * obj.sph[6] + ispec;   //assuming obj[6] = obj->may.col.z
+            
         }
+        
+  
     }
 
-    /* Also, if the object is reflective, spawn a reflection ray, and call trace()
-     * to calculate the light arriving from the mirror direction.
-     */
+    // Also, if the object is reflective, spawn a reflection ray, and call trace()
+    //to calculate the light arriving from the mirror direction.
+    //
     //FOR EVERY REFLECTION RAY THAT IS SUPPOSED TO BE TRACED, THERE MUST BE A STRUCTURE SAVED, CONTAINING THE SPECIFIC PIXEL, THE RAY, AND DEPTH + 1. ALL OF THESE MUST BE STORED IN A "NEW" ARRAY, WHICH IS THEN ACCESSED IN RENDER2 FOLLOWING THE MAIN COMPUTATIONS.!!!!!!!!!!!*******************8
-    if(obj[8] > 0.0) {           //assuming obj[8] = obj->mat.refl
+    if(obj.sph[8] > 0.0) {           //assuming obj[8] = obj->mat.refl
         isReflect[0] = 1;    //set isReflect to affirmative 
 
 
@@ -651,12 +706,13 @@ __device__ struct vec3 shade(double *obj, struct spoint *sp, int depth, int *isR
         Rdata->ray.dir.y *= RAY_MAG;
         Rdata->ray.dir.z *= RAY_MAG;
         Rdata->depth = depth + 1;
-        Rdata->reflection = obj[8];
+        Rdata->reflection = obj.sph[8];
 
 
     }
     else
-        isReflect[0] = 0;      //IF THERE IS NO REFLECTION, SET ISREFLECT TO ZERO
+        isReflect[0] = 0;      //IF THERE IS NO REFLECTION, SET ISREFLECT TO ZERO        
+
     return col;
 }
 
@@ -859,6 +915,7 @@ void load_scene(FILE *fp) {
             fprintf(stderr, "unknown type: %c\n", type);
         }
     }
+
 }
 
 void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
@@ -878,8 +935,6 @@ void flatten_sphere(struct sphere *sphere, double *sphere_flat) {
 }
 
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter) {
-    obj_list_flat = (double *)malloc(9*objCounter*sizeof(double));
-
 
     for (int i = 0; i < objCounter; i++) {
         struct sphere *sphere = obj_list;
@@ -944,6 +999,5 @@ unsigned long get_msec(void) {
 #else
 #error "I don't know how to measure time on your platform"
 #endif
-
 
 
