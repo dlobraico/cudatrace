@@ -287,7 +287,7 @@ int main(int argc, char **argv) {
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
 void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 {
-    dim3 threads_per_block(16, 16);
+    dim3 threads_per_block(8, 8);
 
     int whole_blocks_x = xsz/threads_per_block.x;
     int whole_blocks_y = ysz/threads_per_block.y;
@@ -309,6 +309,9 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     int num_blocks_y = whole_blocks_y + extra_block_y;
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
+
+    printf("num_blocks_x: %i\n", num_blocks_x);
+    printf("num_blocks_y: %i\n", num_blocks_y);
     
     u_int32_t **device_fb = 0;
     u_int32_t **host_fb = 0;
@@ -352,19 +355,20 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
 
-
     // KERNEL CALL!
     render2<<<num_blocks,threads_per_block>>>(device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, objCounterdev, xsz, ysz);
     cudaPeekAtLastError(); // Checks for launch error
     cudaErrorCheck( cudaThreadSynchronize() );
 
-
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
-    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
 
+    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
+    printf("host_fb[0][0]: %u\n", host_fb[0][0]);
+    printf("host_fb[500][200]: %u\n", host_fb[500][200]);
+    printf("host_fb[243][128]: %u\n", host_fb[243][128]);
     printf("lights 0x: %f\n", lights[0].x);
     printf("lights 0y: %f\n", lights[0].y);
     printf("lights 0z: %f\n", lights[0].z);
@@ -383,8 +387,6 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
     if (i >= xsz || j >= ysz) {
         return;
     }
-    u_int32_t answer;
-    int s;
 
     int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
     isReflect[0] = 0;
@@ -400,7 +402,7 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
     double r, g, b;
     r = g = b = 0.0;
 
-    for(s=0; s<samples; s++) {
+    for(int s = 0; s<samples; s++) {
         struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), 0, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, objCounterdev);
         //printf("trace success!\n");	
         while (*isReflect)        //while there are still reflection rays to trace
@@ -421,11 +423,9 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
     b = b * rcp_samples;
 
 
-    answer = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
-             ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-             ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
-
-    device_fb[i][j] = answer;
+    device_fb[i][j] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |   
+                      ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+                      ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
     return;
 }
