@@ -364,7 +364,7 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    printf("host_fb[0][0]: %u\n", host_fb[0][0]);
+    //printf("host_fb[0][0]: %u\n", host_fb[0][0]);
     //printf("host_fb[500][200]: %u\n", host_fb[500][200]);
     //printf("host_fb[243][128]: %u\n", host_fb[243][128]);
     //printf("lights 0x: %f\n", lights[0].x);
