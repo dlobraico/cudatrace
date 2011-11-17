@@ -267,9 +267,9 @@ int main(int argc, char **argv) {
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
     for(i=0; i<yres; i++) {
         for(j=0; j<xres; j++) {
-            fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
-            fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> RSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> GSHIFT) & 0xff, outfile);
+            //fputc((pixels[i][j] >> BSHIFT) & 0xff, outfile);
         }
     }
     fflush(outfile);
@@ -361,6 +361,8 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
+
+    printf("host_fb[0][0] = %u", host_fb[0][0])
 
     free(obj_list_flat);
     cudaErrorCheck( cudaFree(lightsdev) );
