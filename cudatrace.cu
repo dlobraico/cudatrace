@@ -285,7 +285,7 @@ int main(int argc, char **argv) {
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
 void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 {
-    dim3 threads_per_block(8, 8);
+    dim3 threads_per_block(16, 16);
 
     int whole_blocks_x = xsz/threads_per_block.x;
     int whole_blocks_y = ysz/threads_per_block.y;
@@ -364,13 +364,10 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    //printf("host_fb[0][0]: %u\n", host_fb[0][0]);
-    //printf("host_fb[500][200]: %u\n", host_fb[500][200]);
-    //printf("host_fb[243][128]: %u\n", host_fb[243][128]);
-    //printf("lights 0x: %f\n", lights[0].x);
-    //printf("lights 0y: %f\n", lights[0].y);
-    //printf("lights 0z: %f\n", lights[0].z);
-
+    free(obj_list_flat);
+    cudaErrorCheck( cudaFree(lightsdev) );
+    cudaErrorCheck( cudaFree(uranddev) );
+    cudaErrorCheck( cudaFree(iranddev) );
     cudaErrorCheck( cudaFree(device_fb) );
     cudaErrorCheck( cudaFree(obj_list_flat_dev) );
 }   
