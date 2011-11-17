@@ -311,12 +311,12 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     
     u_int32_t **device_fb = 0;
     //u_int32_t **host_fb = 0;
-    size_t arr_size = xsz * ysz * sizeof(u_int32_t);
+    size_t arr_size = xsz * ysz * sizeof(u_int32_t*);
 
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
     host_fb = (u_int32_t **)malloc(arr_size);
 
-    cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
+    cudaErrorCheck(cudaMemcpy(device_fb, host_fb, (xsz*ysz*sizeof(u_int32_t*)), cudaMemcpyHostToDevice));
 
     double *obj_list_flat_dev = 0;
     obj_list_flat = (double *)malloc(sizeof(double)*objCounter*9);
@@ -359,10 +359,10 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
 
-    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, xsz*ysz*sizeof(u_int32_t*), cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    printf("host_fb[0][0] = %u", host_fb[0][0]);
+    printf("host_fb[0][0] = %u\n", host_fb[0][0]);
 
     free(obj_list_flat);
     cudaErrorCheck( cudaFree(lightsdev) );
