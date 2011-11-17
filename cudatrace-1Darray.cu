@@ -38,10 +38,6 @@ typedef unsigned __int8 uint8_t;
 typedef unsigned __int32 uint32_t;
 #endif
 
-
-
-#include <stdio.h>
-
 #define cudaErrorCheck(call) { cudaAssert(call,__FILE__,__LINE__); }
 
 void cudaAssert(const cudaError err, const char *file, const int line)
@@ -52,8 +48,6 @@ void cudaAssert(const cudaError err, const char *file, const int line)
         exit(1);
     } 
 }
-
-
 
 int objCounter = 0;
 
@@ -126,10 +120,10 @@ __device__ struct ray get_primary_ray(int x, int y, int sample, struct camera ca
 __device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev);
 __device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev);
 __device__ int ray_sphere(double *sph, struct ray ray, struct spoint *sp);
+__device__ void get_ith_sphere(double *obj_list_flat, int index, double *sphere_flat);
 void load_scene(FILE *fp);                //FOR NOW, THIS WILL NOT BE MADE PARALLEL
 void flatten_obj_list(struct sphere *obj_list, double *obj_list_flat, int objCounter);
 void flatten_sphere(struct sphere *sphere, double *sphere_flat);
-void get_ith_sphere(double *obj_list_flat, int index, double *sphere_flat);
 unsigned long get_msec(void);             //COUNTING TIME CANNOT BE DONE IN PARALLEL
 inline void check_cuda_errors(const char *filename, const int line_number);
 
@@ -351,9 +345,9 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
 
     host_fb = (struct intss*)malloc(num_bytes_fb); 
-//    host_fb[0].one = 100;
+    host_fb[0].one = 100; // REMOVE
     cudaErrorCheck( cudaMalloc((void **)&device_fb, num_bytes_fb) );
-    cudaErrorCheck(cudaMemcpy(device_fb, &host_fb, num_bytes_fb, cudaMemcpyHostToDevice));
+    cudaErrorCheck(cudaMemcpy(device_fb, host_fb, num_bytes_fb, cudaMemcpyHostToDevice));
 
     printf("cudamalloc framebuffer and host buffer success!\n");
 
@@ -394,11 +388,12 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     printf("pixelspercore memcopy success!\n");	
 
     flatten_obj_list(obj_list,obj_list_flat,objCounter);
+    obj_list_flat = (double *)malloc(sizeof(double)*objCounter*9);
     double *obj_list_flat_dev = 0;
 
     //create obj_list_flat_dev array size of objCounter
     cudaErrorCheck(cudaMalloc((void **)&obj_list_flat_dev, (sizeof(double)*objCounter*9)) );
-    cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, &obj_list_flat, (sizeof(double)*objCounter*9), cudaMemcpyHostToDevice)); //copying over flat sphere array to obj_listdevflat
+    cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, obj_list_flat, (sizeof(double)*objCounter*9), cudaMemcpyHostToDevice)); //copying over flat sphere array to obj_listdevflat
 
     printf("obj_list_flat_dev memcopy and malloc success!\n");
     //printf("device_fb = %i , device_pixelspercore = %i , samples = %i, obj_list_flat_dev = %i\n", device_fb, device_pixelspercore, samples, obj_list_flat_dev);	
@@ -407,9 +402,12 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     int lnumdev = 0;
     struct camera camdev;
     struct vec3 *lightsdev = 0;
-    lights[0].x = 120;
+    lights[0].x = 8; // REMOVE
+    lights[0].y = 54; // REMOVE
+    lights[0].z = 39; // REMOVE
+
     cudaErrorCheck(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)) );
-    cudaErrorCheck(cudaMemcpy(lightsdev, &lights, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyHostToDevice));
+    cudaErrorCheck(cudaMemcpy(lightsdev, lights, MAX_LIGHTS*sizeof(struct vec3), cudaMemcpyHostToDevice));
 
     lnumdev = lnum; //remember to pass lnumdev into render2!
     camdev = cam;   //remember to pass camdev into render2!
@@ -417,12 +415,12 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
     //urand and whatnot
     struct vec3 *uranddev = 0;
     cudaErrorCheck(cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3)) );
-    cudaErrorCheck(cudaMemcpy(uranddev, &urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
+    cudaErrorCheck(cudaMemcpy(uranddev, urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
 
     //irand and whatnot
     int *iranddev = 0;
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
-    cudaErrorCheck(cudaMemcpy(iranddev, &irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
+    cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
 
     // KERNEL CALL!
     render2<<<grid_size,block_size>>>(device_fb, device_pixelspercore, samples, obj_list_flat_dev, numOpsPerCore, lnumdev, camdev, lightsdev, uranddev, iranddev);
@@ -431,14 +429,17 @@ void render1(int xsz, int ysz, u_int32_t *fb, int samples)
 
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
-    cudaErrorCheck(cudaMemcpy(&host_fb, device_fb, num_bytes_fb, cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, num_bytes_fb, cudaMemcpyDeviceToHost));
 
-    cudaErrorCheck(cudaMemcpy(&lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
 
-    printf("output %d\n", host_fb[0].one);
-    printf("output %d\n", host_fb[1].one);
-    printf("output %d\n", host_fb[2].one);
-    printf("lights: %i\n", lights[0].x);
+    printf("output: %d\n", host_fb[0].one);
+    printf("output: %d\n", host_fb[1].one);
+    printf("output: %d\n", host_fb[2].one);
+    printf("lights: %d\n", lights[0].x);
+    printf("lights: %d\n", lights[0].y);
+    printf("lights: %d\n", lights[0].z);
+    printf("lights: %d\n", lights[1]);
 
     free(host_pixelspercore);  
     cudaErrorCheck( cudaFree(device_fb) );
