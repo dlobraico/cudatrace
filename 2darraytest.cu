@@ -68,15 +68,9 @@ void render1(int xsz, int ysz, int *host_fb, int samples) {
     int num_blocks_x = whole_blocks_x + extra_block_x;
     int num_blocks_y = whole_blocks_y + extra_block_y;
 
-    printf("num_blocks_x: %i\n", num_blocks_x);
-    printf("num_blocks_y: %i\n", num_blocks_y);
-
     dim3 num_blocks(num_blocks_x, num_blocks_y);
     
     size_t arr_size = xsz * ysz * sizeof(int);
-    printf("xsz: %i\n", xsz);
-    printf("ysz: %i\n", ysz);
-    printf("arr_size: %zi\n", arr_size);
 
     int *device_fb = 0;
     cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));

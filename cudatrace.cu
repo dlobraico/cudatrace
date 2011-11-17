@@ -270,6 +270,7 @@ int main(int argc, char **argv) {
             fputc((pixels[i + sizeof(u_int32_t)*j] >> RSHIFT) & 0xff, outfile);
             fputc((pixels[i + sizeof(u_int32_t)*j] >> GSHIFT) & 0xff, outfile);
             fputc((pixels[i + sizeof(u_int32_t)*j] >> BSHIFT) & 0xff, outfile);
+            printf("%i, %i: %i\n", i, j, pixels[i + sizeof(u_int32_t)*j]);
         }
     }
     fflush(outfile);
@@ -356,8 +357,8 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
     //once done, copy contents of device array to host array  
 
-    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
 
     free(obj_list_flat);
     cudaErrorCheck( cudaFree(lightsdev) );
