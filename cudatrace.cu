@@ -310,6 +310,10 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
 
     printf("num_blocks_x: %i\n", num_blocks_x);
     printf("num_blocks_y: %i\n", num_blocks_y);
+    printf("whole_blocks_x: %i\n", whole_blocks_x);
+    printf("whole_blocks_y: %i\n", whole_blocks_y);
+    printf("extra_block_x: %i\n", extra_block_x);
+    printf("extra_block_y: %i\n", extra_block_y);
     
     u_int32_t **device_fb = 0;
     //u_int32_t **host_fb = 0;
