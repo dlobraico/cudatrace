@@ -293,7 +293,8 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
     int remainder_threads_x = xsz % threads_per_block.x;
     int remainder_threads_y = ysz % threads_per_block.y;
 
-    int extra_block_x, extra_block_y = 0;
+    int extra_block_x = 0;
+    int extra_block_y = 0;
 
     if (remainder_threads_x > 0) {
         extra_block_x = 1;
@@ -303,17 +304,10 @@ void render1(int xsz, int ysz, u_int32_t **host_fb, int samples)
         extra_block_y = 1;
     }
 
-    int num_blocks_x = whole_blocks_x; //+ extra_block_x;
+    int num_blocks_x = whole_blocks_x + extra_block_x;
     int num_blocks_y = whole_blocks_y + extra_block_y;
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
-
-    printf("num_blocks_x: %i\n", num_blocks_x);
-    printf("num_blocks_y: %i\n", num_blocks_y);
-    printf("whole_blocks_x: %i\n", whole_blocks_x);
-    printf("whole_blocks_y: %i\n", whole_blocks_y);
-    printf("extra_block_x: %i\n", extra_block_x);
-    printf("extra_block_y: %i\n", extra_block_y);
     
     u_int32_t **device_fb = 0;
     //u_int32_t **host_fb = 0;
@@ -382,7 +376,7 @@ __global__ void render2(u_int32_t **device_fb, int samples, double *obj_list_fla
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (i >= xsz || j >= ysz) {
+    if ((i >= xsz) || (j >= ysz)) {
         return;
     } else {
 
