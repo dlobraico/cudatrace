@@ -12,6 +12,10 @@ $(bin): $(src)
 test:
 	./$(bin) -i c-ray-1.1/scene -o scene.ppm
 
+.PHONY: testo
+testo:
+	./$(bin) -i c-ray-1.1/scene -o scene.ppm; open scene.ppm
+
 .PHONY: memcheck
 memcheck:
 	cuda-memcheck ./$(bin) -i c-ray-1.1/scene -o scene.ppm

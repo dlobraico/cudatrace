@@ -87,12 +87,12 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV);
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV);
 __device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *OBJCOUNTERDEV);
 __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, int *isReflect, struct reflectdata *Rdata, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
-__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struct vec3 *uranddev, int *iranddev);
+__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev);
 __device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev);
 __device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev);
 __device__ int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp);
@@ -130,8 +130,8 @@ unsigned long get_msec(void);
 
 /* global state */
 int xres = 800;
-int yres = 600;
-double aspect = 1.333333;
+int yres = 800;
+double aspect = 1;
 struct sphere *obj_list;
 struct sphere *obj_list_flat;
 struct vec3 lights[MAX_LIGHTS];
@@ -140,8 +140,8 @@ int OBJCOUNTER=0;
 struct camera cam;
 
 __device__ int xresdev = 800;
-__device__ int yresdev = 600;
-__device__ double aspectdev = 1.333333;
+__device__ int yresdev = 800;
+__device__ double aspectdev = 1;
 
 #define NRAN	1024
 #define MASK	(NRAN - 1)
@@ -229,39 +229,6 @@ int main(int argc, char **argv) {
     obj_list_flat = (struct sphere *)malloc(sizeof(struct sphere)*OBJCOUNTER+1);  //plus one for the null element at the end
     flatten_obj_list(obj_list,obj_list_flat,OBJCOUNTER);
 
-    printf("Rad1flat: %f\n", obj_list_flat[0].rad);
-    printf("Rad2notnull: %d\n", obj_list_flat[0].notnull);
-    struct sphere *sphee;
-    sphee = obj_list;
-    sphee = sphee->next;
-
-    printf("%f\n", sphee->rad);
-
-    printf("Rad2flat: %f\n", obj_list_flat[1].rad);
-    printf("Rad2notnull: %d\n", obj_list_flat[1].notnull);
-    sphee = sphee->next;
-    printf("%f\n", sphee->rad);
-
-
-    printf("Rad3flat: %f\n", obj_list_flat[2].rad);
-    printf("Rad2notnull: %d\n", obj_list_flat[2].notnull);
-    sphee = sphee->next;
-    printf("%f\n", sphee->rad);
-
-
-    printf("Rad3flat: %f\n", obj_list_flat[3].rad);
-    printf("Rad2notnull: %d\n", obj_list_flat[3].notnull);
-    sphee = sphee->next;
-    printf("%f\n", sphee->rad);
-
-
-    printf("Rad2notnull: %d\n", obj_list_flat[4].notnull);
-
-
-
-
-
-
     /* initialize the random number tables for the jitter */
     for(i=0; i<NRAN; i++) urand[i].x = (double)rand() / RAND_MAX - 0.5;
     for(i=0; i<NRAN; i++) urand[i].y = (double)rand() / RAND_MAX - 0.5;
@@ -274,17 +241,13 @@ int main(int argc, char **argv) {
     /* output statistics to stderr */
     fprintf(stderr, "Rendering took: %lu seconds (%lu milliseconds)\n", rend_time / 1000, rend_time);
 
-    for (int g = 0; g < 100; g++) {
-        printf("Output: %u\n", (pixels[g] >> RSHIFT & 0xff));
-    }
-
     // output the image 
     fprintf(outfile, "P6\n%d %d\n255\n", xres, yres);
-    for(i=0; i<xres; i++) {
-        for(j=0; j<yres; j++) {
-            fputc((pixels[i + sizeof(u_int32_t) * j] >> RSHIFT) & 0xff, outfile);
-            fputc((pixels[i + sizeof(u_int32_t) * j] >> GSHIFT) & 0xff, outfile);
-            fputc((pixels[i + sizeof(u_int32_t) * j] >> BSHIFT) & 0xff, outfile);
+    for(j=0; j<yres; j++) {
+        for(i=0; i<xres; i++) {
+            fputc((pixels[i + (xres * j)] >> RSHIFT) & 0xff, outfile);
+            fputc((pixels[i + (xres * j)] >> GSHIFT) & 0xff, outfile);
+            fputc((pixels[i + (xres * j)] >> BSHIFT) & 0xff, outfile);
         }
     }
     fflush(outfile);
@@ -339,14 +302,17 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 
     //lights and camera and whatnot
     int lnumdev = 0;
-    struct camera camdev;
-    struct vec3 *lightsdev = 0;
 
+    struct camera *camdev = 0;
+    cudaErrorCheck(cudaMalloc((void **)&camdev, sizeof(struct camera)) );
+    cudaErrorCheck(cudaMemcpy(camdev, &cam, sizeof(struct camera), cudaMemcpyHostToDevice));
+
+    struct vec3 *lightsdev = 0;
     cudaErrorCheck(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)) );
     cudaErrorCheck(cudaMemcpy(lightsdev, lights, MAX_LIGHTS*sizeof(struct vec3), cudaMemcpyHostToDevice));
 
     lnumdev = lnum; //remember to pass lnumdev into render2!
-    camdev = cam;   //remember to pass camdev into render2!
+    //camdev = cam;   //remember to pass camdev into render2!
 
     //urand and whatnot
     struct vec3 *uranddev = 0;
@@ -359,7 +325,8 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
 
     // KERNEL CALL!
-    render2<<<num_blocks,threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, OBJCOUNTERDEV);
+    //render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, OBJCOUNTERDEV);
+    render2<<<1,1>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, OBJCOUNTERDEV);
     cudaPeekAtLastError(); // Checks for launch error
     cudaErrorCheck( cudaThreadSynchronize() );
 
@@ -367,7 +334,9 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     //once done, copy contents of device array to host array  
 
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
+    cudaErrorCheck(cudaMemcpy(&cam, camdev, sizeof(struct camera), cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
+    //printf("cam.pos.x: %f\n", cam.pos.x);
 
     free(obj_list_flat);
     cudaErrorCheck( cudaFree(lightsdev) );
@@ -378,15 +347,16 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 }   
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV) {
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int grid_width = gridDim.x * blockDim.x;
+    int index = j * grid_width + i;
+
     int s;
 
-    if ((i >= xsz) || (j >= ysz)) {
-        return; 
-    } else {
+    if ((i < xsz) && (j < ysz)) {
         double rcp_samples = 1.0 / (double)samples;
 
         /* for each subpixel, trace a ray through the scene, accumulate the
@@ -396,23 +366,21 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
          */
 
 
-        int isReflect[1];                        //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
+        int isReflect[1]; //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
         isReflect[0] = 0;
         int depth[1];
         depth[0]=0;
-        struct reflectdata RData[1];           //ARRAY WHICH CONTAINS REFLECT DATA STRUCT TO BE PASSED ON TO TRACE FUNCTION
-
+        struct reflectdata RData[1]; //ARRAY WHICH CONTAINS REFLECT DATA STRUCT TO BE PASSED ON TO TRACE FUNCTION
 
         double r, g, b;
         r = g = b = 0.0;
 
         for(s=0; s<samples; s++) {
-            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, OBJCOUNTERDEV);
 
+            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, OBJCOUNTERDEV);
 
             while (isReflect[0])        //while there are still reflection rays to trace
             {
-                //   printf("isreflect: %d\n", isReflect[0]);
                 struct vec3 rcol;    //holds the output of the reflection ray calculcation
                 rcol = trace(RData->r, depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, OBJCOUNTERDEV);    //trace a reflection ray
                 col.x += rcol.x * RData->reflection;       //I really am unsure about the usage of pointers here..
@@ -431,9 +399,10 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
         g = g * rcp_samples;
         b = b * rcp_samples;
 
-        fb[i + sizeof(u_int32_t)*j] = ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
-            ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-            ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+        fb[index] =        ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
+                           ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+                           ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+
     }
 }
 
@@ -446,7 +415,6 @@ __device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct 
     struct sphere nearest_obj;
     nearest_obj.notnull = 0;
     //	struct sphere *iter = obj_list->next;
-
 
     int iterincr = 0;
     struct sphere *iter = obj_list_flat_dev;
@@ -499,7 +467,6 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
 
         int iterincr = 0;
 
-
         struct sphere *iter = obj_list_flat_dev;
         int in_shadow = 0;
 
@@ -541,7 +508,6 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
 
         isReflect[0] = 1;    //set isReflect to affirmative 
 
-
         Rdata->r.orig = sp->pos;     //SET VALUES OF REFLECTIONDATA STRUCT
         Rdata->r.dir = sp->vref;
         Rdata->r.dir.x *= RAY_MAG;
@@ -549,24 +515,8 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
         Rdata->r.dir.z *= RAY_MAG;
         depth[0] = *depth + 1;
         Rdata->reflection = obj->mat.refl;
-
-
-        //		struct ray ray;
-        //		struct vec3 rcol;
-
-        //		ray.orig = sp->pos;
-        //		ray.dir = sp->vref;
-        //		ray.dir.x *= RAY_MAG;
-        //		ray.dir.y *= RAY_MAG;
-        //		ray.dir.z *= RAY_MAG;
-        //
-        //		rcol = trace(ray, depth + 1);
-        //		col.x += rcol.x * obj->mat.refl;
-        //		col.y += rcol.y * obj->mat.refl;
-        //		col.z += rcol.z * obj->mat.refl;
     }
-    else 
-    {
+    else {
         isReflect[0] = 0;
     }
 
@@ -592,14 +542,14 @@ struct vec3 cross_product(struct vec3 v1, struct vec3 v2) {
 }
 
 /* determine the primary ray corresponding to the specified pixel (x, y) */
-struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struct vec3 *uranddev, int *iranddev) {
+__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev) {
     struct ray ray;
     float m[3][3];
     struct vec3 i, j = {0, 1, 0}, k, dir, orig, foo;
 
-    k.x = camdev.targ.x - camdev.pos.x;
-    k.y = camdev.targ.y - camdev.pos.y;
-    k.z = camdev.targ.z - camdev.pos.z;
+    k.x = camdev->targ.x - camdev->pos.x;
+    k.y = camdev->targ.y - camdev->pos.y;
+    k.z = camdev->targ.z - camdev->pos.z;
     NORMALIZE(k);
 
     i = cross_product(j, k);
@@ -622,9 +572,9 @@ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struc
     foo.y = dir.x * m[1][0] + dir.y * m[1][1] + dir.z * m[1][2];
     foo.z = dir.x * m[2][0] + dir.y * m[2][1] + dir.z * m[2][2];
 
-    orig.x = ray.orig.x * m[0][0] + ray.orig.y * m[0][1] + ray.orig.z * m[0][2] + camdev.pos.x;
-    orig.y = ray.orig.x * m[1][0] + ray.orig.y * m[1][1] + ray.orig.z * m[1][2] + camdev.pos.y;
-    orig.z = ray.orig.x * m[2][0] + ray.orig.y * m[2][1] + ray.orig.z * m[2][2] + camdev.pos.z;
+    orig.x = ray.orig.x * m[0][0] + ray.orig.y * m[0][1] + ray.orig.z * m[0][2] + camdev->pos.x;
+    orig.y = ray.orig.x * m[1][0] + ray.orig.y * m[1][1] + ray.orig.z * m[1][2] + camdev->pos.y;
+    orig.z = ray.orig.x * m[2][0] + ray.orig.y * m[2][1] + ray.orig.z * m[2][2] + camdev->pos.z;
 
     ray.orig = orig;
     ray.dir.x = foo.x + orig.x;
@@ -635,7 +585,7 @@ struct ray get_primary_ray(int x, int y, int sample, struct camera camdev, struc
 }
 
 
-struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
+__device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
     double xsz = 2.0, ysz = xresdev / aspectdev;
     /*static */ double sf = 0.0;
@@ -656,7 +606,7 @@ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int 
 }
 
 /* jitter function taken from Graphics Gems I. */
-struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev) {
+__device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
     pt.x = uranddev[(x + (y << 2) + iranddev[(x + s) & MASK]) & MASK].x;
     pt.y = uranddev[(y + (x << 2) + iranddev[(y + s) & MASK]) & MASK].y;
@@ -667,7 +617,7 @@ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev) {
  * Also the surface point parameters like position, normal, etc are returned through
  * the sp pointer if it is not NULL.
  */
-int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp) {
+__device__ int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp) {
     double a, b, c, d, sqrt_d, t1, t2;
 
     a = SQ(ray.dir.x) + SQ(ray.dir.y) + SQ(ray.dir.z);
