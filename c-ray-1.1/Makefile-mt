@@ -1,11 +1,11 @@
-obj = c-ray-f.o
-bin = c-ray-f
+obj = c-ray-mt.o
+bin = c-ray-mt
 
 CC = gcc
 CFLAGS = -O3 -ffast-math
 
 $(bin): $(obj)
-	$(CC) -o $@ $(obj) -lm
+	$(CC) -o $@ $(obj) -lm -lpthread
 
 .PHONY: clean
 clean:
