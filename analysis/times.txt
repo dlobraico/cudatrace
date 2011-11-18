@@ -1,0 +1,172 @@
+64x64
+================
+Rendering took: 3 seconds (3478 milliseconds)
+Rendering took: 0 seconds (3 milliseconds)
+================
+
+160x160
+================
+Rendering took: 3 seconds (3544 milliseconds)
+Rendering took: 0 seconds (19 milliseconds)
+================
+
+240x240
+================
+Rendering took: 3 seconds (3486 milliseconds)
+Rendering took: 0 seconds (45 milliseconds)
+================
+
+480x480
+================
+Rendering took: 3 seconds (3515 milliseconds)
+Rendering took: 0 seconds (177 milliseconds)
+================
+
+800x800
+================
+Rendering took: 3 seconds (3880 milliseconds)
+Rendering took: 0 seconds (481 milliseconds)
+================
+
+960x960
+================
+Rendering took: 3 seconds (3655 milliseconds)
+Rendering took: 0 seconds (699 milliseconds)
+================
+
+1120x1120
+================
+Rendering took: 3 seconds (3719 milliseconds)
+Rendering took: 0 seconds (961 milliseconds)
+================
+
+1280x1280
+================
+Rendering took: 3 seconds (3795 milliseconds)
+Rendering took: 1 seconds (1252 milliseconds)
+================
+
+1440x1440
+================
+Rendering took: 3 seconds (3913 milliseconds)
+Rendering took: 1 seconds (1581 milliseconds)
+================
+
+2400x2400
+================
+Rendering took: 4 seconds (4416 milliseconds)
+Rendering took: 4 seconds (4350 milliseconds)
+================
+
+4800x4800
+================
+Rendering took: 7 seconds (7216 milliseconds)
+Rendering took: 17 seconds (17371 milliseconds)
+================
+160x160
+================
+Rendering took: 3 seconds (3544 milliseconds)
+Rendering took: 0 seconds (19 milliseconds)
+================
+
+240x240
+================
+Rendering took: 3 seconds (3486 milliseconds)
+Rendering took: 0 seconds (45 milliseconds)
+================
+
+480x480
+================
+Rendering took: 3 seconds (3515 milliseconds)
+Rendering took: 0 seconds (177 milliseconds)
+================
+
+800x800
+================
+Rendering took: 3 seconds (3880 milliseconds)
+Rendering took: 0 seconds (481 milliseconds)
+================
+
+960x960
+================
+Rendering took: 3 seconds (3655 milliseconds)
+Rendering took: 0 seconds (699 milliseconds)
+================
+
+1120x1120
+================
+Rendering took: 3 seconds (3719 milliseconds)
+Rendering took: 0 seconds (961 milliseconds)
+================
+
+1280x1280
+================
+Rendering took: 3 seconds (3795 milliseconds)
+Rendering took: 1 seconds (1252 milliseconds)
+================
+
+1440x1440
+================
+Rendering took: 3 seconds (3913 milliseconds)
+Rendering took: 1 seconds (1581 milliseconds)
+================
+
+2400x2400
+================
+Rendering took: 4 seconds (4416 milliseconds)
+Rendering took: 4 seconds (4350 milliseconds)
+================
+
+4800x4800
+================
+Rendering took: 7 seconds (7216 milliseconds)
+Rendering took: 17 seconds (17371 milliseconds)
+================
+
+8000x8000
+================
+Rendering took: 13 seconds (13619 milliseconds)
+Rendering took: 48 seconds (48369 milliseconds)
+================
+
+9600x9600
+================
+Rendering took: 17 seconds (17992 milliseconds)
+Rendering took: 70 seconds (70100 milliseconds)
+================
+
+11200x11200
+================
+Rendering took: 23 seconds (23043 milliseconds)
+Rendering took: 95 seconds (95731 milliseconds)
+================
+
+12800x12800
+================
+Rendering took: 28 seconds (28964 milliseconds)
+Rendering took: 123 seconds (123865 milliseconds)
+================
+
+14400x14400
+================
+Rendering took: 35 seconds (35541 milliseconds)
+Rendering took: 156 seconds (156731 milliseconds)
+================
+
+16000x16000
+================
+Rendering took: 43 seconds (43037 milliseconds)
+Rendering took: 192 seconds (192968 milliseconds)
+================
+
+20000x20000
+================
+Rendering took: 64 seconds (64919 milliseconds)
+Rendering took: 305 seconds (305460 milliseconds)
+================
+
+24000x24000
+================
+Rendering took: 91 seconds (91357 milliseconds)
+Rendering took: 434 seconds (434595 milliseconds)
+================
