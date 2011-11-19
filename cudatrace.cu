@@ -1,15 +1,14 @@
-/* c-ray-f - a simple raytracing filter.
+/* cudatrace - A CUDA raytracer
+ * By Dominick LoBraico and Laura Macaddino (2011)
+ * Students in Dr. A. Chien's Computer Architecture (CMSC 22200)
+ *
+ * Based on:
+ * c-ray-f - a simple raytracing filter.
  * Copyright (C) 2006 John Tsiombikas <nuclear@siggraph.org>
  *
  * You are free to use, modify and redistribute this program under the
  * terms of the GNU General Public License v2 or (at your option) later.
  * see "http://www.gnu.org/licenses/gpl.txt" for details.
- * ---------------------------------------------------------------------
- * Usage:
- *   compile:  cc -o c-ray-f c-ray-f.c -lm
- *   run:      cat scene | ./c-ray-f >foo.ppm
- *   enjoy:    display foo.ppm (with imagemagick)
- *      or:    imgview foo.ppm (on IRIX)
  * ---------------------------------------------------------------------
  * Scene file format:
  *   # sphere (many)
@@ -57,7 +56,7 @@ struct ray {
 };
 
 
-struct reflectdata {  //STRUCT WHICH CONTAINS THE DATA FOR TRACING FURTHER REFLECTION RAYS
+struct reflectdata {  
     struct ray r;
     double reflection;
 }; 
@@ -87,8 +86,8 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV);
-__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *OBJCOUNTERDEV);
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev);
+__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev);
 __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, int *isReflect, struct reflectdata *Rdata, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
@@ -98,7 +97,7 @@ __device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *i
 __device__ int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);
 
-void flatten_obj_list(struct sphere *obj_list, struct sphere *obj_list_flat, int OBJCOUNTER);
+void flatten_obj_list(struct sphere *obj_list, struct sphere *obj_list_flat, int obj_counter);
 unsigned long get_msec(void);
 
 #define MAX_LIGHTS		16				/* maximum number of lights */
@@ -136,7 +135,7 @@ struct sphere *obj_list;
 struct sphere *obj_list_flat;
 struct vec3 lights[MAX_LIGHTS];
 int lnum = 0;
-int OBJCOUNTER=0;
+int obj_counter=0;
 struct camera cam;
 
 __device__ int xresdev = 800;
@@ -226,8 +225,8 @@ int main(int argc, char **argv) {
     }
     load_scene(infile);
 
-    obj_list_flat = (struct sphere *)malloc(sizeof(struct sphere)*OBJCOUNTER+1);  //plus one for the null element at the end
-    flatten_obj_list(obj_list,obj_list_flat,OBJCOUNTER);
+    obj_list_flat = (struct sphere *)malloc(sizeof(struct sphere)*obj_counter+1);  
+    flatten_obj_list(obj_list,obj_list_flat,obj_counter);
 
     /* initialize the random number tables for the jitter */
     for(i=0; i<NRAN; i++) urand[i].x = (double)rand() / RAND_MAX - 0.5;
@@ -283,7 +282,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     int num_blocks_y = whole_blocks_y + extra_block_y;
 
     dim3 num_blocks(num_blocks_x, num_blocks_y);
-    
+
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
     u_int32_t *device_fb = 0;
@@ -292,15 +291,13 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 
     struct sphere *obj_list_flat_dev;
 
-    //create obj_list_flat_dev array size of objCounter
-    cudaErrorCheck(cudaMalloc((void **)&obj_list_flat_dev, (sizeof(struct sphere)*(OBJCOUNTER+1))));
-    cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, obj_list_flat, (sizeof(struct sphere)*OBJCOUNTER+1), cudaMemcpyHostToDevice)); //copying over flat sphere array to obj_listdevflat
+    cudaErrorCheck(cudaMalloc((void **)&obj_list_flat_dev, (sizeof(struct sphere)*(obj_counter+1))));
+    cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, obj_list_flat, (sizeof(struct sphere)*obj_counter+1), cudaMemcpyHostToDevice)); 
 
-    int *OBJCOUNTERDEV = 0;
-    cudaErrorCheck(cudaMalloc((void**)&OBJCOUNTERDEV, sizeof(int)));
-    cudaErrorCheck( cudaMemcpy(OBJCOUNTERDEV, &OBJCOUNTER, sizeof(int), cudaMemcpyHostToDevice) );
+    int *obj_counter_dev = 0;
+    cudaErrorCheck(cudaMalloc((void**)&obj_counter_dev, sizeof(int)));
+    cudaErrorCheck( cudaMemcpy(obj_counter_dev, &obj_counter, sizeof(int), cudaMemcpyHostToDevice) );
 
-    //lights and camera and whatnot
     int lnumdev = 0;
 
     struct camera *camdev = 0;
@@ -311,31 +308,23 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     cudaErrorCheck(cudaMalloc((void **)&lightsdev, MAX_LIGHTS*sizeof(struct vec3)) );
     cudaErrorCheck(cudaMemcpy(lightsdev, lights, MAX_LIGHTS*sizeof(struct vec3), cudaMemcpyHostToDevice));
 
-    lnumdev = lnum; //remember to pass lnumdev into render2!
-    //camdev = cam;   //remember to pass camdev into render2!
+    lnumdev = lnum; 
 
-    //urand and whatnot
     struct vec3 *uranddev = 0;
     cudaErrorCheck(cudaMalloc((void **)&uranddev, NRAN*sizeof(struct vec3)) );
-    cudaErrorCheck(cudaMemcpy(uranddev, urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
+    cudaErrorCheck(cudaMemcpy(uranddev, urand, sizeof(struct vec3) * NRAN, cudaMemcpyHostToDevice)); 
 
-    //irand and whatnot
     int *iranddev = 0;
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
-    cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); //remember to pass all of these into render2!!
+    cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); 
 
-    // KERNEL CALL!
-    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, OBJCOUNTERDEV);
-    cudaPeekAtLastError(); // Checks for launch error
+    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter_dev);
+    cudaPeekAtLastError(); 
     cudaErrorCheck( cudaThreadSynchronize() );
-
-    //In all seriousness, all of the cores should now be operating on the ray tracing, if things are working correctly 
-    //once done, copy contents of device array to host array  
 
     cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(&cam, camdev, sizeof(struct camera), cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
-    //printf("cam.pos.x: %f\n", cam.pos.x);
 
     free(obj_list_flat);
     cudaErrorCheck( cudaFree(lightsdev) );
@@ -346,7 +335,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 }   
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *OBJCOUNTERDEV) {
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -364,25 +353,24 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
          * XXX: assumes contiguous scanlines with NO padding, and 32bit pixels.
          */
 
-
-        int isReflect[1]; //WHETHER OR NOT RAY TRACED WILL NEED A REFLECTION RAY AS WELL
+        int isReflect[1]; 
         isReflect[0] = 0;
         int depth[1];
         depth[0]=0;
-        struct reflectdata RData[1]; //ARRAY WHICH CONTAINS REFLECT DATA STRUCT TO BE PASSED ON TO TRACE FUNCTION
+        struct reflectdata RData[1]; 
 
         double r, g, b;
         r = g = b = 0.0;
 
         for(s=0; s<samples; s++) {
 
-            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, OBJCOUNTERDEV);
+            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
 
-            while (isReflect[0])        //while there are still reflection rays to trace
+            while(isReflect[0])
             {
-                struct vec3 rcol;    //holds the output of the reflection ray calculcation
-                rcol = trace(RData->r, depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, OBJCOUNTERDEV);    //trace a reflection ray
-                col.x += rcol.x * RData->reflection;       //I really am unsure about the usage of pointers here..
+                struct vec3 rcol;    
+                rcol = trace(RData->r, depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
+                col.x += rcol.x * RData->reflection;
                 col.y += rcol.y * RData->reflection;
                 col.z += rcol.z * RData->reflection;
             }   
@@ -399,8 +387,8 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
         b = b * rcp_samples;
 
         fb[index] =        ((u_int32_t)(MIN(r, 1.0) * 255.0) & 0xff) << RSHIFT |
-                           ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
-                           ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
+            ((u_int32_t)(MIN(g, 1.0) * 255.0) & 0xff) << GSHIFT |
+            ((u_int32_t)(MIN(b, 1.0) * 255.0) & 0xff) << BSHIFT;
 
     }
 }
@@ -408,12 +396,11 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
 /* trace a ray throught the scene recursively (the recursion happens through
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev, int *OBJCOUNTERDEV) {
+__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
     struct sphere nearest_obj;
     nearest_obj.notnull = 0;
-    //	struct sphere *iter = obj_list->next;
 
     int iterincr = 0;
     struct sphere *iter = obj_list_flat_dev;
@@ -436,7 +423,6 @@ __device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct 
         }
         iterincr++;
         iter = &(obj_list_flat_dev[iterincr]);
-        //iter = iter->next;
     }
 
     /* and perform shading calculations as needed by calling shade() */
@@ -462,7 +448,6 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
         double ispec, idiff;
         struct vec3 ldir;
         struct ray shadow_ray;
-        //		struct sphere *iter = obj_list->next;
 
         int iterincr = 0;
 
@@ -484,7 +469,6 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
             }
             iterincr++;
             iter = &(obj_list_flat_dev[iterincr]);
-            //	iter = iter->next;
         }
 
         /* and if we're not in shadow, calculate direct illumination with the phong model. */
@@ -505,9 +489,9 @@ __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, 
      */
     if(obj->mat.refl > 0.0) {
 
-        isReflect[0] = 1;    //set isReflect to affirmative 
+        isReflect[0] = 1;
 
-        Rdata->r.orig = sp->pos;     //SET VALUES OF REFLECTIONDATA STRUCT
+        Rdata->r.orig = sp->pos;
         Rdata->r.dir = sp->vref;
         Rdata->r.dir.x *= RAY_MAG;
         Rdata->r.dir.y *= RAY_MAG;
@@ -587,7 +571,7 @@ __device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *c
 __device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
     double xsz = 2.0, ysz = xresdev / aspectdev;
-    /*static */ double sf = 0.0;
+    double sf = 0.0;
 
     if(sf == 0.0) {
         sf = 2.0 / (double)xresdev;
@@ -657,7 +641,7 @@ __device__ int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp)
 /* Load the scene from an extremely simple scene description file */
 #define DELIM	" \t\n"
 void load_scene(FILE *fp) {
-    OBJCOUNTER = 0;
+    obj_counter = 0;
     char line[256], *ptr, type;
 
     obj_list = (struct sphere *)malloc(sizeof(struct sphere));
@@ -715,7 +699,7 @@ void load_scene(FILE *fp) {
             sph->mat.col = col;
             sph->mat.spow = spow;
             sph->mat.refl = refl;
-            OBJCOUNTER++;
+            obj_counter++;
         } else {
             fprintf(stderr, "unknown type: %c\n", type);
         }
@@ -724,14 +708,12 @@ void load_scene(FILE *fp) {
 
 
 
-void flatten_obj_list(struct sphere *obj_list, struct sphere *obj_list_flat, int OBJCOUNTER) {
-
-
+void flatten_obj_list(struct sphere *obj_list, struct sphere *obj_list_flat, int obj_counter) {
     struct sphere *sphere = obj_list;
     sphere = sphere->next;
 
     int j;
-    for (j = 0; j < OBJCOUNTER; j++) {
+    for (j = 0; j < obj_counter; j++) {
         obj_list_flat[j] = *sphere;
         obj_list_flat[j].notnull = 1;
         sphere = sphere->next;
@@ -744,7 +726,6 @@ void flatten_obj_list(struct sphere *obj_list, struct sphere *obj_list_flat, int
 
 
 }
-
 
 /* provide a millisecond-resolution timer for each system */
 #if defined(__unix__) || defined(unix) || defined(__MACH__)
