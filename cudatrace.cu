@@ -86,8 +86,8 @@ struct camera {
 };
 
 void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int obj_counter);
-__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int obj_counter);
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev);
+__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev);
 __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, int *isReflect, struct reflectdata *Rdata, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
@@ -285,22 +285,18 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
-     u_int32_t *device_fb = 0;
-    /*
-     * cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
-     * cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
-     */
+    u_int32_t *device_fb = 0;
+    //cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
+    //cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
     struct sphere *obj_list_flat_dev;
 
     cudaErrorCheck(cudaMalloc((void **)&obj_list_flat_dev, (sizeof(struct sphere)*(obj_counter+1))));
     cudaErrorCheck(cudaMemcpy(obj_list_flat_dev, obj_list_flat, (sizeof(struct sphere)*obj_counter+1), cudaMemcpyHostToDevice)); 
 
-    /*
-     * int *obj_counter_dev = 0;
-     * cudaErrorCheck(cudaMalloc((void**)&obj_counter_dev, sizeof(int)));
-     * cudaErrorCheck( cudaMemcpy(obj_counter_dev, &obj_counter, sizeof(int), cudaMemcpyHostToDevice) );
-     */
+    int *obj_counter_dev = 0;
+    cudaErrorCheck(cudaMalloc((void**)&obj_counter_dev, sizeof(int)));
+    cudaErrorCheck( cudaMemcpy(obj_counter_dev, &obj_counter, sizeof(int), cudaMemcpyHostToDevice) );
 
     int lnumdev = 0;
 
@@ -322,7 +318,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); 
 
-    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter);
+    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter_dev);
     cudaPeekAtLastError(); 
     cudaErrorCheck( cudaThreadSynchronize() );
 
@@ -339,7 +335,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 }   
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int obj_counter) {
+__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -368,12 +364,12 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
 
         for(s=0; s<samples; s++) {
 
-            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter);
+            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
 
             while(isReflect[0])
             {
                 struct vec3 rcol;    
-                rcol = trace(RData->r, depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter);
+                rcol = trace(RData->r, depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
                 col.x += rcol.x * RData->reflection;
                 col.y += rcol.y * RData->reflection;
                 col.z += rcol.z * RData->reflection;
@@ -400,7 +396,7 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
 /* trace a ray throught the scene recursively (the recursion happens through
  * shade() to calculate reflection rays if necessary).
  */
-__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev, int obj_counter) {
+__device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev) {
     struct vec3 col;
     struct spoint sp, nearest_sp;
     struct sphere nearest_obj;
