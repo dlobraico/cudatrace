@@ -8,8 +8,7 @@ p <- ggplot(speed, aes(megapixels, legend = TRUE))
 p <- p +  opts(title = "Performance of Raytracer Implementations at Various Resolutions", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
 p <- p + geom_jitter(aes(y = speed$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10000,60000,120000,180000,300000,420000)) 
-p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500))
-
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500)) 
 ggsave("cumulative.pdf")
 
 run1 <- subset(speed,run==1)
@@ -20,16 +19,14 @@ p <- ggplot(run1, aes(megapixels, legend = TRUE))
 p <- p +  opts(title = "Run 1", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
 p <- p + geom_jitter(aes(y = run1$time, color = application_type), position = position_jitter(width=10))  
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10000,60000,120000,180000,300000,420000)) 
-p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500))
-
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500)) 
 ggsave("run1.pdf")
 
 p <- ggplot(run2, aes(megapixels, legend = TRUE)) 
 p <- p +  opts(title = "Run 2", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
 p <- p + geom_jitter(aes(y = run2$time, color = application_type), position = position_jitter(width=10))  
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10000,60000,120000,180000,300000,420000)) 
-p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500))
-
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500)) 
 ggsave("run2.pdf")
 
 p <- ggplot(run3, aes(megapixels, legend = TRUE)) 
@@ -37,5 +34,32 @@ p <- p +  opts(title = "Run 3", legend.title = theme_text(colour='black', size=1
 p <- p + geom_jitter(aes(y = run3$time, color = application_type), position = position_jitter(width=10))  
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10000,60000,120000,180000,300000,420000)) 
 p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500))
-
 ggsave("run3.pdf")
+
+p <- ggplot(speed, aes(megapixels, legend = TRUE)) 
+p <- p +  opts(title = "Performance of Raytracer Implementations at Various Resolutions", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
+p <- p + geom_jitter(aes(y = speed$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
+p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,10000)) 
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,2,3,4,5,6,7,8,9,10), limits = c(0,10))
+ggsave("inset.pdf")
+
+p <- ggplot(run1, aes(megapixels, legend = TRUE)) 
+p <- p +  opts(title = "Run 1", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
+p <- p + geom_jitter(aes(y = run1$time, color = application_type), position = position_jitter(width=10))  
+p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,10000)) 
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,2,3,4,5,6,7,8,9,10), limits = c(0,10))
+ggsave("inset-run1.pdf")
+
+p <- ggplot(run2, aes(megapixels, legend = TRUE)) 
+p <- p +  opts(title = "Run 2", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
+p <- p + geom_jitter(aes(y = run2$time, color = application_type), position = position_jitter(width=10))  
+p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,10000)) 
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,2,3,4,5,6,7,8,9,10), limits = c(0,10))
+ggsave("inset-run2.pdf")
+
+p <- ggplot(run3, aes(megapixels, legend = TRUE)) 
+p <- p +  opts(title = "Run 3", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
+p <- p + geom_jitter(aes(y = run3$time, color = application_type), position = position_jitter(width=10))  
+p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,10000)) 
+p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,2,3,4,5,6,7,8,9,10), limits = c(0,10))
+ggsave("inset-run3.pdf")
