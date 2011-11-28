@@ -319,19 +319,19 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); 
 
     render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter_dev);
-    cudaPeekAtLastError(); 
-    cudaErrorCheck( cudaThreadSynchronize() );
+    //cudaPeekAtLastError(); 
+    //cudaErrorCheck( cudaThreadSynchronize() );
 
-    cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
-    cudaErrorCheck(cudaMemcpy(&cam, camdev, sizeof(struct camera), cudaMemcpyDeviceToHost));
+    //cudaErrorCheck(cudaMemcpy(lights, lightsdev, sizeof(struct vec3) * MAX_LIGHTS, cudaMemcpyDeviceToHost));
+    //cudaErrorCheck(cudaMemcpy(&cam, camdev, sizeof(struct camera), cudaMemcpyDeviceToHost));
     cudaErrorCheck(cudaMemcpy(host_fb, device_fb, arr_size, cudaMemcpyDeviceToHost));
 
     free(obj_list_flat);
-    cudaErrorCheck( cudaFree(lightsdev) );
+    /*cudaErrorCheck( cudaFree(lightsdev) );
     cudaErrorCheck( cudaFree(uranddev) );
     cudaErrorCheck( cudaFree(iranddev) );
     cudaErrorCheck( cudaFree(device_fb) );
-    cudaErrorCheck( cudaFree(obj_list_flat_dev) );
+    cudaErrorCheck( cudaFree(obj_list_flat_dev) );*/
 }   
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
