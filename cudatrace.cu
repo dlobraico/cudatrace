@@ -286,7 +286,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     size_t arr_size = xsz * ysz * sizeof(u_int32_t);
 
     u_int32_t *device_fb = 0;
-    //cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
+    cudaErrorCheck(cudaMalloc((void **)&device_fb, arr_size));
     //cudaErrorCheck(cudaMemcpy(device_fb, host_fb, arr_size, cudaMemcpyHostToDevice));
 
     struct sphere *obj_list_flat_dev;
