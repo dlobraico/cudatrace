@@ -26,15 +26,18 @@ p
 ggsave("real_time.pdf")
 
 p + 
-scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 200000))
+scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 200000)) +
+geom_line(aes(y = real_time, group = factor(total_threads), color = factor(total_threads)))
 ggsave("real_time_zoom1.pdf")
 
 p + 
-scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 60000))
+scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 60000)) +
+geom_line(aes(y = real_time, group = factor(total_threads), color = factor(total_threads)))
 ggsave("real_time_zoom2.pdf")
 
 p +
-scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 18500)) + scale_x_continuous("Megapixels Rendered", formatter="comma", limits = c(0,25)) + geom_line(aes(y = real_time, group = factor(total_threads), color = factor(total_threads)))
+scale_y_continuous("Real Time (ms)", formatter="comma", limits = c(0, 18500)) + scale_x_continuous("Megapixels Rendered", formatter="comma", limits = c(0,25)) + 
+geom_line(aes(y = real_time, group = factor(total_threads), color = factor(total_threads)))
 ggsave("real_time_zoom3.pdf")
 
 p <- ggplot(speed, aes(megapixels, legend = TRUE)) +  
