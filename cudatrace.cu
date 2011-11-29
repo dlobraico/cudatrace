@@ -85,14 +85,14 @@ struct camera {
     double fov;
 };
 
-void render1(int xsz, int ysz, u_int32_t *fb, int samples);
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev);
+void render1(int xsz, int ysz, double aspect, u_int32_t *fb, int samples);
+__global__ void render2(int xsz, int ysz, double aspect, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev);
 __device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev);
 __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, int *isReflect, struct reflectdata *Rdata, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev);
 __device__ struct vec3 reflect(struct vec3 v, struct vec3 n);
 __device__ struct vec3 cross_product(struct vec3 v1, struct vec3 v2);
-__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev);
-__device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev);
+__device__ struct ray get_primary_ray(int xres, int yres, double aspect, int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev);
+__device__ struct vec3 get_sample_pos(int xres, int yres, double aspect, int x, int y, int sample, struct vec3 *uranddev, int *iranddev);
 __device__ struct vec3 jitter(int x, int y, int s, struct vec3 *uranddev, int *iranddev);
 __device__ int ray_sphere(struct sphere *sph, struct ray ray, struct spoint *sp);
 void load_scene(FILE *fp);
@@ -137,10 +137,6 @@ struct vec3 lights[MAX_LIGHTS];
 int lnum = 0;
 int obj_counter=0;
 struct camera cam;
-
-__device__ int xresdev = 800;
-__device__ int yresdev = 800;
-__device__ double aspectdev = 1;
 
 #define NRAN	1024
 #define MASK	(NRAN - 1)
@@ -234,7 +230,7 @@ int main(int argc, char **argv) {
     for(i=0; i<NRAN; i++) irand[i] = (int)(NRAN * ((double)rand() / RAND_MAX));
 
     start_time = get_msec();
-    render1(xres, yres, pixels, rays_per_pixel);
+    render1(xres, yres, aspect, pixels, rays_per_pixel);
     rend_time = get_msec() - start_time;
 
     /* output statistics to stderr */
@@ -257,7 +253,7 @@ int main(int argc, char **argv) {
 }
 
 
-void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
+void render1(int xsz, int ysz, double aspect, u_int32_t *host_fb, int samples)
 {
     dim3 threads_per_block(16, 16);
 
@@ -318,7 +314,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
     cudaErrorCheck(cudaMalloc((void **)&iranddev, NRAN*sizeof(int)) );
     cudaErrorCheck(cudaMemcpy(iranddev, irand, sizeof(int) * NRAN, cudaMemcpyHostToDevice)); 
 
-    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter_dev);
+    render2<<<num_blocks, threads_per_block>>>(xsz, ysz, aspect, device_fb, samples, obj_list_flat_dev, lnumdev, camdev, lightsdev, uranddev, iranddev, obj_counter_dev);
     //cudaPeekAtLastError(); 
     //cudaErrorCheck( cudaThreadSynchronize() );
 
@@ -335,7 +331,7 @@ void render1(int xsz, int ysz, u_int32_t *host_fb, int samples)
 }   
 
 /* render a frame of xsz/ysz dimensions into the provided framebuffer */
-__global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev) {
+__global__ void render2(int xsz, int ysz, double aspect, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev) {
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -364,7 +360,7 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
 
         for(s=0; s<samples; s++) {
 
-            struct vec3 col = trace(get_primary_ray(i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
+            struct vec3 col = trace(get_primary_ray(xsz, ysz, aspect, i, j, s, camdev, uranddev, iranddev), depth, isReflect, RData, obj_list_flat_dev, lnumdev, lightsdev, obj_counter_dev);
 
             while(isReflect[0])
             {
@@ -525,7 +521,7 @@ struct vec3 cross_product(struct vec3 v1, struct vec3 v2) {
 }
 
 /* determine the primary ray corresponding to the specified pixel (x, y) */
-__device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev) {
+__device__ struct ray get_primary_ray(int xres, int yres, double aspect, int x, int y, int sample, struct camera *camdev, struct vec3 *uranddev, int *iranddev) {
     struct ray ray;
     float m[3][3];
     struct vec3 i, j = {0, 1, 0}, k, dir, orig, foo;
@@ -542,7 +538,7 @@ __device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *c
     m[2][0] = i.z; m[2][1] = j.z; m[2][2] = k.z;
 
     ray.orig.x = ray.orig.y = ray.orig.z = 0.0;
-    ray.dir = get_sample_pos(x, y, sample, uranddev, iranddev);
+    ray.dir = get_sample_pos(xres, yres, aspect, x, y, sample, uranddev, iranddev);
     ray.dir.z = 1.0 / HALF_FOV;
     ray.dir.x *= RAY_MAG;
     ray.dir.y *= RAY_MAG;
@@ -568,22 +564,22 @@ __device__ struct ray get_primary_ray(int x, int y, int sample, struct camera *c
 }
 
 
-__device__ struct vec3 get_sample_pos(int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
+__device__ struct vec3 get_sample_pos(int xres, int yres, double aspect, int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
-    double xsz = 2.0, ysz = xresdev / aspectdev;
+    double xsz = 2.0, ysz = xres / aspect;
     double sf = 0.0;
 
     if(sf == 0.0) {
-        sf = 2.0 / (double)xresdev;
+        sf = 2.0 / (double)xres;
     }
 
-    pt.x = ((double)x / (double)xresdev) - 0.5;
-    pt.y = -(((double)y / (double)yresdev) - 0.65) / aspectdev;
+    pt.x = ((double)x / (double)xres) - 0.5;
+    pt.y = -(((double)y / (double)yres) - 0.65) / aspect;
 
     if(sample) {
         struct vec3 jt = jitter(x, y, sample, uranddev, iranddev);
         pt.x += jt.x * sf;
-        pt.y += jt.y * sf / aspectdev;
+        pt.y += jt.y * sf / aspect;
     }
     return pt;
 }
