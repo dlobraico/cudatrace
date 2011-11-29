@@ -85,7 +85,7 @@ struct camera {
     double fov;
 };
 
-void render1(int xsz, int ysz, double aspect, u_int32_t *fb, int samples);
+void render1(int xsz, int ysz, double aspect, u_int32_t *fb, int samples, int threads_x, int threads_y);
 __global__ void render2(int xsz, int ysz, double aspect, u_int32_t *fb, int samples, struct sphere *obj_list_flat_dev, int lnumdev, struct camera *camdev, struct vec3 *lightsdev, struct vec3 *uranddev, int *iranddev, int *obj_counter_dev);
 __device__ struct vec3 trace(struct ray ray, int *depth, int *isReflect, struct reflectdata *RData, struct sphere *obj_list_flat, int lnumdev, struct vec3 *lightsdev, int *obj_counter_dev);
 __device__ struct vec3 shade(struct sphere *obj, struct spoint *sp, int *depth, int *isReflect, struct reflectdata *Rdata, struct sphere *obj_list_flat_dev, int lnumdev, struct vec3 *lightsdev);
@@ -130,6 +130,8 @@ unsigned long get_msec(void);
 /* global state */
 int xres = 800;
 int yres = 800;
+int x_threads = 16;
+int y_threads = 16;
 double aspect = 1;
 struct sphere *obj_list;
 struct sphere *obj_list_flat;
@@ -199,6 +201,15 @@ int main(int argc, char **argv) {
                     rays_per_pixel = atoi(argv[i]);
                     break;
 
+                case 't':
+                    if(!isdigit(argv[++i][0]) || !(sep = strchr(argv[i], 'x')) || !isdigit(*(sep + 1))) {
+                        fputs("-t must be followed by something like \"16x16\"\n", stderr);
+                        return EXIT_FAILURE;
+                    }
+                    x_threads = atoi(argv[i]);
+                    y_threads = atoi(sep + 1);
+                    break;
+
                 case 'h':
                     fputs(usage, stdout);
                     return 0;
@@ -227,7 +238,7 @@ int main(int argc, char **argv) {
     for(i=0; i<NRAN; i++) irand[i] = (int)(NRAN * ((double)rand() / RAND_MAX));
 
     start_time = get_msec();
-    render1(xres, yres, aspect, pixels, rays_per_pixel);
+    render1(xres, yres, aspect, pixels, rays_per_pixel, x_threads, y_threads);
     rend_time = get_msec() - start_time;
 
     /* output statistics to stderr */
@@ -250,9 +261,9 @@ int main(int argc, char **argv) {
 }
 
 
-void render1(int xsz, int ysz, double aspect, u_int32_t *host_fb, int samples)
+void render1(int xsz, int ysz, double aspect, u_int32_t *host_fb, int samples, int x_threads, int y_threads)
 {
-    dim3 threads_per_block(16, 16);
+    dim3 threads_per_block(x_threads, y_threads);
 
     int whole_blocks_x = xsz/threads_per_block.x;
     int whole_blocks_y = ysz/threads_per_block.y;
@@ -563,7 +574,7 @@ __device__ struct ray get_primary_ray(int xres, int yres, double aspect, int x, 
 
 __device__ struct vec3 get_sample_pos(int xres, int yres, double aspect, int x, int y, int sample, struct vec3 *uranddev, int *iranddev) {
     struct vec3 pt;
-    double xsz = 2.0, ysz = xres / aspect;
+    //double xsz = 2.0, ysz = xres / aspect;
     double sf = 0.0;
 
     if(sf == 0.0) {
