@@ -215,10 +215,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(!(pixels = (u_int32_t *)malloc(xres * yres * sizeof *pixels))) {
-        perror("pixel buffer allocation failed");
-        return EXIT_FAILURE;
-    }
+    cudaErrorCheck(cudaMallocHost((void**) &pixels, xres * yres * sizeof *pixels));
     load_scene(infile);
 
     obj_list_flat = (struct sphere *)malloc(sizeof(struct sphere)*obj_counter+1);  
