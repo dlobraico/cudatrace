@@ -339,7 +339,7 @@ __global__ void render2(int xsz, int ysz, u_int32_t *fb, int samples, struct sph
 
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    int grid_width = gridDim.x * blockDim.x;
+    int grid_width = xsz; 
     int index = j * grid_width + i;
 
     int s;
