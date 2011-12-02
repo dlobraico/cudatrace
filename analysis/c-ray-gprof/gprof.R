@@ -10,3 +10,5 @@ p <- ggplot(gprof_output, aes(x = name, y = percent_time, fill = name)) +
 opts(axis.text.x = theme_blank()) + 
 geom_bar(width = 1) + scale_x_discrete("Output Resolution (pixels)") + scale_fill_hue("Function") + scale_y_continuous("Percentage of Running Time", formatter = "percent") + facet_grid(. ~ resolution)
 p
+
+ggsave("gprof_output.pdf")
