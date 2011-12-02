@@ -2,13 +2,13 @@
 # CUDA_DEVICE 0 Tesla M2050
 # CUDA_CONTEXT 1
 # CUDA_PROFILE_CSV 1
-# TIMESTAMPFACTOR fffff6d64aea35d0
+# TIMESTAMPFACTOR fffff6d5ced43e28
 method,gputime,cputime,occupancy
-memcpyHtoD,3.552,320.000
-memcpyHtoD,1.024,349.000
-memcpyHtoD,1.088,301.000
-memcpyHtoD,1.088,283.000
-memcpyHtoD,6.528,356.000
-memcpyHtoD,1.792,302.000
-_Z7render2iidPjiP6sphereiP6cameraP4vec3S5_PiS6_,447825216.000,1877.000,0.167
-memcpyDtoH,39163.297,447859328.000
+memcpyHtoD,3.264,321.000
+memcpyHtoD,1.088,268.000
+memcpyHtoD,1.120,270.000
+memcpyHtoD,1.088,357.000
+memcpyHtoD,5.952,320.000
+memcpyHtoD,1.472,276.000
+_Z7render2iidPjiP6sphereiP6cameraP4vec3S5_PiS6_,447700448.000,2007.000,0.167
+memcpyDtoH,39160.895,447730432.000
