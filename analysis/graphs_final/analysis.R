@@ -100,3 +100,31 @@ ggsave("render_time_vs_real_time_zoom1.pdf")
 
 p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,1500)) + scale_x_continuous("Real Time (ms)", formatter="comma", limits = c(0,6000))
 ggsave("render_time_vs_real_time_zoom2.pdf")
+
+p <- ggplot(speed, aes(megapixels, legend = TRUE)) + 
+geom_point(aes(y = speed$render_speedup, shape = application_type, color = factor(total_threads)), size = 4) +
+scale_shape("Application Type", solid=TRUE) + 
+scale_color_hue("Total Threads") + 
+scale_y_continuous("Render Speedup") + 
+scale_x_continuous("Megapixels Rendered", formatter="comma") + 
+geom_line(aes(y = render_speedup, group = factor(total_threads), color = factor(total_threads))) 
+p
+ggsave("render_speedup_vs_megapixels.pdf")
+
+p + scale_x_continuous("Megapixels Rendered", formatter="comma", limits = c(0,2))
+ggsave("render_speedup_vs_megapixels_zoom.pdf")
+
+p <- ggplot(speed, aes(megapixels, legend = TRUE)) + 
+geom_point(aes(y = speed$real_speedup, shape = application_type, color = factor(total_threads)), size = 4) +
+scale_shape("Application Type", solid=TRUE) + 
+scale_color_hue("Total Threads") + 
+scale_y_continuous("Real Speedup") + 
+scale_x_continuous("Megapixels Rendered", formatter="comma") 
+p + geom_line(aes(y = real_speedup, group = factor(total_threads), color = factor(total_threads))) 
+p
+ggsave("real_speedup_vs_megapixels.pdf")
+
+p + scale_x_continuous("Megapixels Rendered", formatter="comma", limits = c(0,25)) +
+scale_y_continuous("Real Speedup", limits = c(0, 2)) +
+geom_smooth(aes(y = real_speedup, group = factor(total_threads), color = factor(total_threads))) 
+ggsave("real_speedup_vs_megapixels_zoom.pdf")
