@@ -1,0 +1,22 @@
+PERFORMANCE EVALUATION
+
+In evaluating cudatrace, we hoped to compare the sequential version with the CUDA version for variable block sizes as well as resolutions. To make this possible, we first modified our existing application so that it would accept block dimensions as a command-line argument in addition to output resolution. The end result being that cudatrace can be called with syntax like
+        
+        ./cudatrace -i scenefile -o scene.ppm -s 800x600 -t 16x16
+
+and render an 800 by 600 pixel image using 16*16 = 256 threads per block.
+
+With this addition, we were able to use a custom shell script, cudatrace-tester.sh, to test cudatrace. To ensure rigor and accurate results, we ran the test suite three times. To explore the performance speedup of cudatrace with respect to C-Ray at varying output image sizes, we tested both for the following resolutions (in pixels): 64x64, 160x160, 240x240, 480x480, 800x800, 960x960, 1120x1120, 1280x1280, 1440x1440, 2400x2400, 4800x4800, 8000x8000, 9600x9600, 11200x11200, 12800x12800, 14400x14400, and 16000x16000. In addition, we tested cudatrace at the following block sizes for each of those image resolutions: 1x1, 2x2, 4x4, 8x8, 12x12, 16x16, 20x20, 22x22.
+
+For three runs, this test suite takes roughly three hours, with much of the time spent rendering large images at small block sizes in cudatrace and in C-Ray. Under ideal circumstances, we would have tested both tracers at more image sizes to ensure good data resolution, but for our purposes this was sufficient. 
+
+The output of the test script is a comma-separated values (CSV) file with rows containing columns expressing the width and height of the output image, the x and y dimensions of the CUDA blocks, the render time, the real time, the application type (CUDA or sequential), and the run number. The distinction between render time and real time is important. The latter is simply the "wall time" for the program's execution: the time is noted at the initial command-line call and after the application returns; the difference between the two times is the real time taken. This includes I/O, CUDA overhead, and all other delays relevant to the execution of an application. The render time, on the other hand, attempts to prevent some of these factors from playing a role.  In the case of the sequential version of the program, this time is only the time taken to trace all of the rays. Crucially In the CUDA version, render time is simply the time taken to copy the stored scene information to the GPU, trace all necessary rays, and copy the result information back to the host. 
+
+Crucially, the first call to the CUDA API occurs outside of this render time, eliminating from our performance analysis the unavoidable 3.5 second initialization time taken for the CUDA drivers to recognize the presence of a GPU and begin communicating with it. We discovered this quirk when trying to optimize cudatrace at low image resolutions. We found that there seemed to be an asymptotic lower limit to the real time that we were able to achieve around 3.5 seconds. To test if this latency was indeed the result of so-called context initialization, we wrote a small program to simply run "cudaFree(0)" once on the device and timed it using the same method as we had in our earlier evaluations. We found that this driver call, the only CUDA call in the test program, indeed took roughly 3.5 seconds to run on our test platform. Having thus verified this, we focused on optimizing render time and less of an emphasis on real time.
+
+INSERT GRAPH OF CUDA_WARMUP OUTPUT
+INSERT GRAPH OF RENDER TIME VS REAL TIME (with caption)
+
+We imported our test data into R and added some additional variables. We calculated both real speedup and render speedup as the time the sequential program took divided by the time the parallel version took, for each iteration. We also trivially calculated the total pixels and total threads for each run. We used the ggplot package to provide some interesting visualizations.
+
+BEGIN ANALYSIS

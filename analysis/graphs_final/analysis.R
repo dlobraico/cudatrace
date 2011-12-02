@@ -7,14 +7,26 @@ speed$megapixels = speed$total_pixels/1000000
 speed$total_threads = speed$xthreads * speed$ythreads
 levels(speed$total_threads) =  c(1,4,16,64,144,256,400,484) 
 
-threads_1   <- subset(speed,total_threads==1)
-threads_4   <- subset(speed,total_threads==4)
-threads_16  <- subset(speed,total_threads==16)
-threads_64  <- subset(speed,total_threads==64)
-threads_144 <- subset(speed,total_threads==144)
-threads_256 <- subset(speed,total_threads==256)
-threads_400 <- subset(speed,total_threads==400)
-threads_484 <- subset(speed,total_threads==484)
+generate_speedup_factor <- function(df) {
+    df$real_speedup = 1
+    df$render_speedup = 1
+    for (run in 1:3) {
+        for (resolution in c(64,160,240,480,800,960,1120,1280,1440,2400,4800,8000,9600,11200,12800,14400,16000)) {
+            cuda       <- df[df$run == run & (df$xres == resolution & df$yres == resolution) & df$application_type == "cuda",]
+            sequential <- df[df$run == run & (df$xres == resolution & df$yres == resolution) & df$application_type == "sequential",]
+
+            cuda$real_speedup   <- sequential[1,]$real_time/cuda$real_time
+            cuda$render_speedup <- sequential[1,]$render_time/cuda$render_time
+
+            df[df$run == run & (df$xres == resolution & df$yres == resolution) & df$application_type == "cuda",] <- cuda
+            df[df$run == run & (df$xres == resolution & df$yres == resolution) & df$application_type == "sequential",] <- sequential
+        }
+    }
+    return(df)
+}
+
+total_speed <- generate_speedup_factor(speed)
+speed <- total_speed[speed$run == 1,]
 
 p <- ggplot(speed, aes(megapixels, legend = TRUE)) +  
 opts(title = "Performance of Raytracer Implementations at Various Resolutions and Block Sizes", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1)) + 
