@@ -140,3 +140,41 @@ p + scale_x_continuous("Megapixels Rendered", formatter="comma", limits = c(0,25
 scale_y_continuous("Real Speedup", limits = c(0, 2)) +
 geom_smooth(aes(y = real_speedup, group = factor(total_threads), color = factor(total_threads))) 
 ggsave("real_speedup_vs_megapixels_zoom.pdf")
+
+
+max_speedup_each_res <- function(df) {
+    resolutions <- c(64,160,240,480,800,960,1120,1280,1440,2400,4800,8000,9600,11200,12800,14400,16000)
+    speedup_df <- data.frame()
+    i <- 0
+
+    for (resolution in resolutions) {
+        real_speedup <- max(df[(df$xres == resolution & df$yres == resolution) & df$application_type == "cuda",]$real_speedup)
+        render_speedup <- max(df[(df$xres == resolution & df$yres == resolution) & df$application_type == "cuda",]$render_speedup)
+        num_threads <- (df[df$render_speedup == render_speedup,]$xthreads * df[df$render_speedup == render_speedup,]$ythreads)
+
+        speedup_df <- rbind(speedup_df, c(resolution, real_speedup, render_speedup, min(num_threads), max(num_threads)))
+        i <- i + 1
+    }
+
+    names(speedup_df) <- c("resolution","real_speedup","render_speedup", "min_num_threads", "max_num_threads")
+    return(speedup_df)
+}
+max_speedup <- max_speedup_each_res(total_speed)
+
+qplot(max_speedup, x = max_speedup$resolution, y = max_speedup$real_speedup, color = factor(max_speedup$max_num_threads), size = 10)
+qplot(max_speedup, x = max_speedup$resolution, y = max_speedup$render_speedup, color = factor(max_speedup$max_num_threads), size = 10)
+
+max(total_speed[total_speed$real_speedup >= 1 & total_speed$application_type != "sequential",]$xres)
+min(total_speed[total_speed$real_speedup >= 1 & total_speed$application_type != "sequential",]$xres)
+
+max(total_speed[total_speed$render_speedup >= 1 & total_speed$application_type != "sequential",]$xres)
+min(total_speed[total_speed$render_speedup >= 1 & total_speed$application_type != "sequential",]$xres)
+
+max(total_speed[total_speed$real_speedup >= 1 & total_speed$application_type != "sequential",]$total_threads)
+min(total_speed[total_speed$real_speedup >= 1 & total_speed$application_type != "sequential",]$total_threads)
+
+max(total_speed[total_speed$render_speedup >= 1 & total_speed$application_type != "sequential",]$total_threads)
+min(total_speed[total_speed$render_speedup >= 1 & total_speed$application_type != "sequential",]$total_threads)
+
+#total_speed[total_speed$xres == 240 & total_speed$application_type == "cuda",c(1,3,9,13,15,14)]
+max_speedup

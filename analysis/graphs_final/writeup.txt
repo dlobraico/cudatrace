@@ -15,8 +15,32 @@ The output of the test script is a comma-separated values (CSV) file with rows c
 Crucially, the first call to the CUDA API occurs outside of this render time, eliminating from our performance analysis the unavoidable 3.5 second initialization time taken for the CUDA drivers to recognize the presence of a GPU and begin communicating with it. We discovered this quirk when trying to optimize cudatrace at low image resolutions. We found that there seemed to be an asymptotic lower limit to the real time that we were able to achieve around 3.5 seconds. To test if this latency was indeed the result of so-called context initialization, we wrote a small program to simply run "cudaFree(0)" once on the device and timed it using the same method as we had in our earlier evaluations. We found that this driver call, the only CUDA call in the test program, indeed took roughly 3.5 seconds to run on our test platform. Having thus verified this, we focused on optimizing render time and less of an emphasis on real time.
 
 INSERT GRAPH OF CUDA_WARMUP OUTPUT
+FIX: MAKE TABLE IN LaTeX
+[ec2-user@ip-10-16-9-74 cudatrace]$ ./warmup 
+total_time: 3464
+ec2-user@ip-10-16-9-74 cudatrace]$ ./warmup 
+total_time: 3426
+[ec2-user@ip-10-16-9-74 cudatrace]$ ./warmup 
+total_time: 3517
+[ec2-user@ip-10-16-9-74 cudatrace]$ ./warmup 
+total_time: 3422
+[ec2-user@ip-10-16-9-74 cudatrace]$ ./warmup 
+total_time: 3414
+
 INSERT GRAPH OF RENDER TIME VS REAL TIME (with caption)
 
 We imported our test data into R and added some additional variables. We calculated both real speedup and render speedup as the time the sequential program took divided by the time the parallel version took, for each iteration. We also trivially calculated the total pixels and total threads for each run. We used the ggplot package to provide some interesting visualizations.
 
-BEGIN ANALYSIS
+INSERT GRAPH OF RENDER SPEEDUP VS MEGAPIXELS RENDERED
+INSERT GRAPH OF REAL SPEEDUP VS MEGAPIXELS RENDERED
+
+REPLACE WITH SWEAVE
+On the surface, it is very clear that our parallelized ray tracer performs better than the original sequential version of C-Ray. In real time, we were able to realize a maximum speed up of 3.644164 for a 16000x16000 pixel image. When measuring render time, we saw an even more impressive maximum of 4.959866 speedup for a 1280x1280 pixel image. This does not tell the whole story however. The number of threads that cudatrace was executed with played a significant role in determining the speedup. 
+
+INSERT TABLE OF max_speedup_each_res(total_speed)                                                                                                                                                                                       
+
+We did not see a real speedup for anything in our test suite below 4800x4800 pixel images, where we found a max real speedup of 1.97697984. Above that resolution however, we did see real speedups in all block sizes from 4x4 through 22x22. The 1x1 and 2x2 block sizes fell short of providing us with any improvement, as expected. For render time, we saw speedups in the same range of block sizes, but at a much lower starting resolution. At 240x240 pixels we saw render speedups ranging from approximately 1.05 for 4x4 threads to near 1.65 for 8x8 threads and just below that for 16x16 threads. We conclude that the significant difference in the "break even" point between real and render time is almost completely the result of the context initialization overhead inherit to CUDA and discussed previously. The less significant difference between the render speedup break even point of approximately 240x240 pixels can almost certainly be attributed to the overhead of allocating space on the CUDA device for the various components of the scene as well as copying the pixels frame buffer back from the device at the completion of all ray tracing calculations. As discussed INSERT SECTION HERE we believe we have reached a plateau in the potential optimizations of this element of the application. Because of this, we now address the render speedup in slightly more detail.
+
+Despite the fact that there was some variation in the number of threads that gave the best performance at various resolutions, there was a clear pattern to the optimized block sizes. Overall, the most efficient number of threads was 16x16 = 256. This is directly tied to the hardware we did our testing on, the Tesla M2050 GPU. For cudatrace, reading and writing to memory are the highest latency operations executed, so the more threads we are able to run in parallel, the better we are able to disguise this latency. The M2050 have a CUDA compute capability of 2.0 and thus a maximum of 48 warps per multiprocessor (MP), eight thread blocks per MP, and 1536 threads per MP. Additionally, there is a physical limit of 32 threads per warp. Thus, for cases where overhead is not dominant, the optimal block size is that which maximizes the occupancy of each multiprocessor, or 1536 threads total.  In our case, this amounts to utilizing 1536/32 = 48 warps per multiprocessor, the maximum. When we have 16x16 = 256 threads, we use 256*(6 blocks) = 1536 active threads per multiprocessor, 100% of the number of threads allowed on each multiprocessor. On the other hand, when we have 22x22 = 484 threads, we use 484*(3 blocks) = 1452 threads per multiprocessor, only 94% of the maximum number of threads. The maximum number of threads per block on CUDA 2.0 cards is 512. To comply with our use of two dimensional thread blocks, this would require an illegal block size of 22.63x22.63. Thus, 16x16 is the maximum block size that we can utilize with 100% multiprocessor occupancy.
+
+For image resolutions below 2400x2400, we found that block sizes of 8x8 were actually slightly more efficient than those of 16x16 despite the fact that the former only reaches 33% occupancy. We attribute this to the added overhead required to create many threads four times as many threads for such a relatively small resolution. Note that the render speedup difference between 8x8 and 16x16 in this range is on the order of magnitude of 0.1. Above 2400x2400, 16x16 threads reigns supreme, although a block size of 8x8  only lags behind by approximately 0.1 with regard to render speedup.
