@@ -1,19 +1,19 @@
 library(ggplot2) 
-speed <- read.csv("data.csv", header=T)
-speed$total_pixels = speed$xres * speed$yres
-speed$seconds = speed$time/1000
-speed$megapixels = speed$total_pixels/1000000
+initial <- read.csv("data.csv", header=T)
+initial$total_pixels = initial$xres * initial$yres
+initial$seconds = initial$time/1000
+initial$megapixels = initial$total_pixels/1000000
 
-p <- ggplot(speed, aes(megapixels, legend = TRUE)) 
+p <- ggplot(initial, aes(megapixels, legend = TRUE)) 
 p <- p +  opts(title = "Performance of Raytracer Implementations at Various Resolutions", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
-p <- p + geom_jitter(aes(y = speed$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
+p <- p + geom_jitter(aes(y = initial$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10000,60000,120000,180000,300000,420000)) 
 p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500)) 
 ggsave("cumulative.pdf")
 
-run1 <- subset(speed,run==1)
-run2 <- subset(speed,run==2)
-run3 <- subset(speed,run==3)
+run1 <- subset(initial,run==1)
+run2 <- subset(initial,run==2)
+run3 <- subset(initial,run==3)
 
 p <- ggplot(run1, aes(megapixels, legend = TRUE)) 
 p <- p +  opts(title = "Run 1", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
@@ -36,9 +36,9 @@ p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", breaks = c(10
 p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,10,50,100,200,300,400,500))
 ggsave("run3.pdf")
 
-p <- ggplot(speed, aes(megapixels, legend = TRUE)) 
+p <- ggplot(initial, aes(megapixels, legend = TRUE)) 
 p <- p +  opts(title = "Performance of Raytracer Implementations at Various Resolutions", legend.title = theme_text(colour='black', size=10, face='bold', hjust=-.1))
-p <- p + geom_jitter(aes(y = speed$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
+p <- p + geom_jitter(aes(y = initial$time, color = application_type, shape = factor(run)), position = position_jitter(width=7)) + scale_shape("Run", solid=FALSE) + scale_color_hue("Application Type")
 p <- p + scale_y_continuous("Render Time (ms)", formatter="comma", limits = c(0,10000)) 
 p <- p + scale_x_continuous("Megapixels Rendered", formatter="comma", breaks = c(1,2,3,4,5,6,7,8,9,10), limits = c(0,10))
 ggsave("inset.pdf")
