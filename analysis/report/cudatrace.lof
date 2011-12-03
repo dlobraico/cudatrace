@@ -4,9 +4,11 @@
 \contentsline {figure}{\numberline {4}{\ignorespaces C-Ray version}}{8}{figure.4}
 \contentsline {figure}{\numberline {5}{\ignorespaces \texttt {flatten\_obj\_list} implementation}}{9}{figure.5}
 \contentsline {figure}{\numberline {6}{\ignorespaces Avoiding recursion in \textsc {cudatrace}}}{10}{figure.6}
-\contentsline {figure}{\numberline {7}{\ignorespaces Render Time versus Real Time}}{14}{figure.7}
-\contentsline {figure}{\numberline {8}{\ignorespaces Real Speedup versus Megapixels}}{16}{figure.8}
-\contentsline {figure}{\numberline {9}{\ignorespaces Render Speedup versus Megapixels}}{17}{figure.9}
-\contentsline {figure}{\numberline {10}{\ignorespaces Inset---Render Speedup versus Megapixels}}{18}{figure.10}
-\contentsline {figure}{\numberline {11}{\ignorespaces Inset---Real Time versus Megapixels}}{20}{figure.11}
-\contentsline {figure}{\numberline {12}{\ignorespaces Inset---Render Time versus Megapixels}}{21}{figure.12}
+\contentsline {figure}{\numberline {7}{\ignorespaces Resolution versus Megapixels---Initial Version}}{12}{figure.7}
+\contentsline {figure}{\numberline {8}{\ignorespaces Inset---Resolution versus Megapixels---Initial Version}}{13}{figure.8}
+\contentsline {figure}{\numberline {9}{\ignorespaces Render Time versus Real Time}}{16}{figure.9}
+\contentsline {figure}{\numberline {10}{\ignorespaces Real Speedup versus Megapixels}}{18}{figure.10}
+\contentsline {figure}{\numberline {11}{\ignorespaces Render Speedup versus Megapixels}}{19}{figure.11}
+\contentsline {figure}{\numberline {12}{\ignorespaces Inset---Render Speedup versus Megapixels}}{20}{figure.12}
+\contentsline {figure}{\numberline {13}{\ignorespaces Inset---Real Time versus Megapixels}}{22}{figure.13}
+\contentsline {figure}{\numberline {14}{\ignorespaces Inset---Render Time versus Megapixels}}{23}{figure.14}
