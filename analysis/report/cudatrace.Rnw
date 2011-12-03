@@ -21,14 +21,22 @@
 
 \usepackage{listings}
 \usepackage{booktabs}
+\usepackage{float}
 \usepackage{hyperref}
+\hypersetup{
+    colorlinks,
+    citecolor=blue,
+    filecolor=blue,
+    linkcolor=blue,
+    urlcolor=blue
+}
 \renewcommand{\nobreakspace}{\nobreak\ }
 
 
 \defaultfontfeatures{Mapping=tex-text}
 
 \begin{document}
-\lstset{language=C,breaklines=true}
+\lstset{language=C,breaklines=true,frame=single,basicstyle=\footnotesize}
 
 \title{cudatrace --- A parallel ray tracer written in CUDA/C}
 \author{Dominick LoBraico and Laura Macaddino}
@@ -182,11 +190,9 @@ max_speedup_each_res <- function(df) {
         i <- i + 1
     }
 
-    names(speedup_df) <- c("resolution","real_speedup","render_speedup", "min_num_threads", "max_num_threads")
+    names(speedup_df) <- c("Resolution","Real Speedup","Render Speedup", "Minimum Threads", "Maximum Threads")
     return(speedup_df)
 }
-
-max_speedup <- max_speedup_each_res(total_speed)
 
 #qplot(max_speedup, x = max_speedup$resolution, y = max_speedup$real_speedup, color = factor(max_speedup$max_num_threads), size = 10)
 #plot(max_speedup, x = max_speedup$resolution, y = max_speedup$render_speedup, color = factor(max_speedup$max_num_threads), size = 10)
@@ -214,17 +220,17 @@ max_least_real_speedup <- max(total_speed[total_speed$xres == min_res_real_speed
 
 Ray-tracing is a computer graphics technique that is very useful for generating images with a high degree of realism. It uses an algorithm to build an image that considers both the view ray of the observer and the shadow ray of the light source on the objects within the scene. Ray-tracing comes at a high computational cost and is usually implemented when the end product can be generated ahead of time. Thus, it is very useful for producing visual effects, such as reflection and dispersion, on still images and film, and it is rarely used in real-time generated images, such as in video games.
 
-C-Ray is a ray-tracing benchmark that was created by John Tsiombikas and is available for download\footnote{http://www.futuretech.blinkenlights.nl/c-ray.html}. It is available to be freely modified under the GNU Public License v2. John Tisombikas created it to be an extremely simple tool, and he wrote it in as few lines of code as possible. It contains less than 2,000 lines of code and is simply a measure of double-precision floating-point CPU performance. It is a CPU core benchmark test that does not consider the RAM or I/O speed of the system it is being run on. The code itself reads a scene file and outputs an image and the benchmark data. The rays per pixel, and the height and width of the output image, and the scene specification can be modified in order to increase or decrease the strain on the CPU and the total testing time. Thus, we feel that this gives us access to code that is very powerful and useful but has much room for improvement, which we attempt to exploit in the development of \textsc{cudatrace}.
+C-Ray is a ray-tracing benchmark that was created by John Tsiombikas and is available for download\footnote{{http://www.futuretech.blinkenlights.nl/c-ray.html}}. It is available to be freely modified under the GNU Public License v2. John Tisombikas created it to be an extremely simple tool, and he wrote it in as few lines of code as possible. It contains less than 2,000 lines of code and is simply a measure of double-precision floating-point CPU performance. It is a CPU core benchmark test that does not consider the RAM or I/O speed of the system it is being run on. The code itself reads a scene file and outputs an image and the benchmark data. The rays per pixel, and the height and width of the output image, and the scene specification can be modified in order to increase or decrease the strain on the CPU and the total testing time. Thus, we feel that this gives us access to code that is very powerful and useful but has much room for improvement, which we attempt to exploit in the development of \textsc{cudatrace}.
 
-We have chosen to use NVIDIA's CUDA GPGPU architecture as a platform for \textsc{cudatrace}’s creation. Graphics cards, already optimized for many different forms of graphics rendering, seem particularly well-suited to an application like C-Ray. The parallel throughput of a graphics processing unit, in which many threads run concurrently---each at a slightly slower speed---, rather than a single thread running at maximum speed, is fitting for a ray-tracer. Giving each ray its own thread on the GPU and letting them render concurrently should offer vast improvement gains over the current implementation of the tracer, in which each ray is generated consecutively and in the same thread.
+We have chosen to use NVIDIA's CUDA GPGPU architecture as a platform for \textsc{cudatrace}'s creation. Graphics cards, already optimized for many different forms of graphics rendering, seem particularly well-suited to an application like C-Ray. The parallel throughput of a graphics processing unit, in which many threads run concurrently---each at a slightly slower speed---, rather than a single thread running at maximum speed, is fitting for a ray-tracer. Giving each ray its own thread on the GPU and letting them render concurrently should offer vast improvement gains over the current implementation of the tracer, in which each ray is generated consecutively and in the same thread.
 
 Applications written in CUDA execute code in parallel on the graphics processing unit by initializing so-called CUDA kernels.Within each kernel is a one, two, or three dimensional matrix of blocks. Each of those blocks contains a similarly-dimensioned group of threads, each executing the code referenced by the kernel call. When many threads are created in the same block, they execute simultaneously, therein serving as the root of parallelism in CUDA programming.
 
-All of our successful experiments took place on Amazon EC2’s GPU cluster instance, which is equipped with two NVIDIA Tesla “Fermi” M2050 GPUs. The M2050 GPU has 448 CUDA cores, 3 GB of GDDR5 memory, 148 GB/second memory bandwidth, and 225W TDP. Because the Tesla M2050 has a compute capability of 2.0, it is capable of running 32  CUDA cores per Streaming Multiprocessor(SM) in parallel. Each SM has a limit of 1536 threads, and the amount of blocks per SM is based on how many threads are in each block.
+All of our successful experiments took place on Amazon EC2's GPU cluster instance, which is equipped with two NVIDIA Tesla “Fermi” M2050 GPUs. The M2050 GPU has 448 CUDA cores, 3 GB of GDDR5 memory, 148 GB/second memory bandwidth, and 225W TDP. Because the Tesla M2050 has a compute capability of 2.0, it is capable of running 32  CUDA cores per Streaming Multiprocessor(SM) in parallel. Each SM has a limit of 1536 threads, and the amount of blocks per SM is based on how many threads are in each block.
 
-In determining a model for parallelism, we used \texttt{gprof} to display the total amount of time taken for each C-Ray function. For every run of \texttt{gprof}, we used a standard pixel benchmarking scene containing only three objects and one light source. Additionally, only one ray would be traced per pixel, not counting reflection rays. Scene dimensions varied among $800\times 800$, $1600 \times 1600$, $2400 \times 2400$, $3200 \times 3200$, $4000 \times 4000$, and $4800 \times 4800$ pixels. Our profiling data allowed us to determine that approximately 70\% of C-Ray’s runtime was taken up in the \texttt{ray\_sphere} function. The \texttt{ray\_sphere} function determines whether or not there is a ray-sphere intersection for a given ray. Although this function consumed the most time per program instance, its operations contained little to no parallelism which could be exploited. Instead of finding a minor part inside of the \texttt{ray\_sphere} function which could contain parallelism, we decided to call each \texttt{ray\_sphere} function in parallel. When one ray is being traced, \texttt{ray\_sphere} is called a minimum amount of times as the number of objects in a scene. With this knowledge, we could choose to commence a kernel call each time \texttt{ray\_sphere} is called. This would give us a minimum amount of parallelism proportional to the amount of objects in a scene. However, we could also choose to exploit much greater parallelism by simultaneously running an amount of \texttt{ray\_sphere} functions proportional to the number of pixels in a rendered image. To do this,we would trace each ray for each pixel in a scene in parallel. We figured this model would be possible because individual rays share data such as scene primitives and materials, but they never modify this data. Thus, the generation of one ray is not dependent on the generation of another ray, and they can be traced in parallel. While creating this model, we determined that each of our tests would be held on the given benchmark scene in various dimensions, tracing only one ray per pixel. In this manner, our tests would be consistent and easier to read, as they would not take into account the overhead of reading varying amounts data from a scene.
+In determining a model for parallelism, we used \texttt{gprof} to display the total amount of time taken for each C-Ray function. For every run of \texttt{gprof}, we used a standard pixel benchmarking scene containing only three objects and one light source. Additionally, only one ray would be traced per pixel, not counting reflection rays. Scene dimensions varied among $800\times 800$, $1600 \times 1600$, $2400 \times 2400$, $3200 \times 3200$, $4000 \times 4000$, and $4800 \times 4800$ pixels. Our profiling data allowed us to determine that approximately 70\% of C-Ray's runtime was taken up in the \texttt{ray\_sphere} function. The \texttt{ray\_sphere} function determines whether or not there is a ray-sphere intersection for a given ray. Although this function consumed the most time per program instance, its operations contained little to no parallelism which could be exploited. Instead of finding a minor part inside of the \texttt{ray\_sphere} function which could contain parallelism, we decided to call each \texttt{ray\_sphere} function in parallel. When one ray is being traced, \texttt{ray\_sphere} is called a minimum amount of times as the number of objects in a scene. With this knowledge, we could choose to commence a kernel call each time \texttt{ray\_sphere} is called. This would give us a minimum amount of parallelism proportional to the amount of objects in a scene. However, we could also choose to exploit much greater parallelism by simultaneously running an amount of \texttt{ray\_sphere} functions proportional to the number of pixels in a rendered image. To do this,we would trace each ray for each pixel in a scene in parallel. We figured this model would be possible because individual rays share data such as scene primitives and materials, but they never modify this data. Thus, the generation of one ray is not dependent on the generation of another ray, and they can be traced in parallel. While creating this model, we determined that each of our tests would be held on the given benchmark scene in various dimensions, tracing only one ray per pixel. In this manner, our tests would be consistent and easier to read, as they would not take into account the overhead of reading varying amounts data from a scene.
 
-Figures \ref{code:c-ray} and \ref{fig:gprof} provide a more concrete view of which functions are called during C-Ray’s ray-tracing scheme and the average amount of time taken per function.
+Figures \ref{code:c-ray} and \ref{fig:gprof} provide a more concrete view of which functions are called during C-Ray's ray-tracing scheme and the average amount of time taken per function.
 
 \begin{figure}
     \caption{C-Ray's ray tracing algorithm} \label{code:c-ray}
@@ -264,15 +270,15 @@ Using the knowledge of Tesla M2050 specifications, we can divide ray generation 
 
 In addition to determining how many threads per block will be tracing rays, we will also have to optimize locality of the pixel data each thread needs. If we do not consider locality, each time a block runs out of stored pixel data to generate a ray, it has to fetch more data from the host. Because it takes more time to fetch data from outside of the kernel than inside, the accumulated transferring of data between the host and kernel will consume significant overhead and possibly trump the gains of computing in parallel. For this reason, we must distribute all of the pixel data necessary for each block to trace its maximum amount of rays before computations begin.
 
-We have implemented \textsc{cudatrace} using NVIDIA’s CUDA Developer Toolkit. This toolkit includes several useful tools for programming in CUDA as well as debugging code written using the CUDA API. The \texttt{nvcc} utility compiles CUDA/C or CUDA/C++ code in a format familiar to anyone who has used \texttt{gcc}. Similarly, \texttt{cuda-gdb} is a port of another familiar UNIX tool, the GNU Debugger, and is capable of debugging both native host code as well as CUDA code. The \texttt{cuda-memcheck} tool provides an interface for reporting runtime execution and memory access errors. Finally, NVIDIA's CUDA Profiler outputs the performance details of each individual CUDA API function call made.
+We have implemented \textsc{cudatrace} using NVIDIA's CUDA Developer Toolkit. This toolkit includes several useful tools for programming in CUDA as well as debugging code written using the CUDA API. The \texttt{nvcc} utility compiles CUDA/C or CUDA/C++ code in a format familiar to anyone who has used \texttt{gcc}. Similarly, \texttt{cuda-gdb} is a port of another familiar UNIX tool, the GNU Debugger, and is capable of debugging both native host code as well as CUDA code. The \texttt{cuda-memcheck} tool provides an interface for reporting runtime execution and memory access errors. Finally, NVIDIA's CUDA Profiler outputs the performance details of each individual CUDA API function call made.
 
 
 \section{Initial Modification}
-A significant portion of \textsc{cudatrace}'s primary modifications consisted of CUDA API function call additions to allocate and transfer memory between the host and device prior to and following the rendering of a scene by means of ray-tracing. A brief description follows of CUDA’s conventions for obtaining parallelism and the purpose of CUDA API functions. Before any parallel computation can begin, the kernel must have access to all of the data it will utilize. The kernel does not have access to any malloc-allocated memory in the host, so a specific CUDA API function call must be made to allocate kernel-specific memory, called \texttt{cudaMalloc}. Similarly, cudaFree is used to free any memory allocated with \texttt{cudaMalloc}. This memory still cannot be seen by the kernel until it is passed as an argument into the kernel call. In order to transfer data between host-allocated memory and the kernel-allocated memory, the \texttt{cudaMemcpy} function is used. The first kernel function called must have a \texttt{\_\_global\_\_} prefix added to its definition, and it always takes as an argument the number of threads per block and the number of blocks to be used. Additionally, any functions called within the kernel must have a \texttt{\_\_device\_\_} prefix.    
+A significant portion of \textsc{cudatrace}'s primary modifications consisted of CUDA API function call additions to allocate and transfer memory between the host and device prior to and following the rendering of a scene by means of ray-tracing. A brief description follows of CUDA's conventions for obtaining parallelism and the purpose of CUDA API functions. Before any parallel computation can begin, the kernel must have access to all of the data it will utilize. The kernel does not have access to any malloc-allocated memory in the host, so a specific CUDA API function call must be made to allocate kernel-specific memory, called \texttt{cudaMalloc}. Similarly, cudaFree is used to free any memory allocated with \texttt{cudaMalloc}. This memory still cannot be seen by the kernel until it is passed as an argument into the kernel call. In order to transfer data between host-allocated memory and the kernel-allocated memory, the \texttt{cudaMemcpy} function is used. The first kernel function called must have a \texttt{\_\_global\_\_} prefix added to its definition, and it always takes as an argument the number of threads per block and the number of blocks to be used. Additionally, any functions called within the kernel must have a \texttt{\_\_device\_\_} prefix.    
 
 With these conventions for parallelism in mind, figures \ref{code:c-ray_basic} and \ref{code:cudatrace_basic} compare how C-Ray and \textsc{cudatrace} call the function to initialize ray-tracing and transfer output data into an image file.
 
-\begin{figure}
+\begin{figure}[H]
     \caption{C-Ray version} \label{code:c-ray_basic}
 \begin{lstlisting}
 ...
@@ -290,7 +296,7 @@ write the RGB values to the image file
 \end{lstlisting}
 \end{figure}
 
-\begin{figure}
+\begin{figure}[H]
     \caption{\textsc{cudatrace} version} \label{code:cudatrace_basic}
 \begin{lstlisting}
 ...
@@ -327,9 +333,9 @@ As seen in the pseudocode, the primary difference between C-Ray and \textsc{cuda
 
 Also present in the \textsc{cudatrace} pseudocode is a calculation of the number of threads and the number of blocks. \textsc{cudatrace} divides each image up into two-dimensional blocks of 256 (16 by 16) threads, a number we initially chose to ensure relatively broad cross-platform compatibility when dealing with GPUs that have varying maximum thread per block limits. Each thread handles the tracing and rendering of one single pixel. These blocks in turn make up a two-dimensional grid of dimensions (image width divided by the number of threads) by (image height divided by the number of threads). Thus, the full grid encompasses the full resolution of the image by way of maximized parallelism. In the final implementation of \textsc{cudatrace}, we assess the benefits of more or fewer threads per block.
 
-This led to at least one complexity in our render functions, as we now needed to store all of these pixels, already logically oriented in a grid as they should be, in a one-dimensional array. This proved to be a relatively simple task, given CUDA’s support for thread, block, and grid indices. Once we calculated the $x$ and $y$ coordinates of the pixel currently being operated on, storing it was simply a matter of using a flattened index of the form “x times grid width + y”. The final remaining snag was dealing with those image resolutions that were not an even multiple of 16 (the number of threads per block in each dimension). In those cases, we simply add one more partially filled block to the total number of blocks in that dimension. As a result, in our rendering functions we have to check to ensure that our $x$ and $y$ coordinates are less than the $x$ and $y$ dimensions of the image we are rendering to make sure we do not go out of bounds or overflow. 
+This led to at least one complexity in our render functions, as we now needed to store all of these pixels, already logically oriented in a grid as they should be, in a one-dimensional array. This proved to be a relatively simple task, given CUDA's support for thread, block, and grid indices. Once we calculated the $x$ and $y$ coordinates of the pixel currently being operated on, storing it was simply a matter of using a flattened index of the form “x times grid width + y”. The final remaining snag was dealing with those image resolutions that were not an even multiple of 16 (the number of threads per block in each dimension). In those cases, we simply add one more partially filled block to the total number of blocks in that dimension. As a result, in our rendering functions we have to check to ensure that our $x$ and $y$ coordinates are less than the $x$ and $y$ dimensions of the image we are rendering to make sure we do not go out of bounds or overflow. 
 
-Aside from the modifications made in apparent in \textsc{cudatrace}’s pseudocode, we were forced to further restructure certain C-Ray functions to make up for limitations of CUDA architecture. For example, C-Ray creates a linked list of objects when it loads data from the scene file. C-Ray understandably uses a linked list to contain objects because it cannot determine how many elements will be in a scene and thus how much memory to allocate for a flat array prior to reading the scene file. However, as demonstrated in the pseudocode, each host memory allocation containing data which will be used by the kernel must have a corresponding kernel memory allocation. It would be impractical to suffer the overhead of a number of \texttt{cudaMalloc} calls equivalent to the number of objects in a scene, so we implemented a function which would create a flattened array of the host’s linked list of objects. This flattened array memory is then copied to its corresponding kernel array in the aforementioned pseudocode. Figure \ref{code:flatten_obj_list} illustrates the function \texttt{flatten\_obj\_list}, which flattens a linked list of objects.
+Aside from the modifications made in apparent in \textsc{cudatrace}'s pseudocode, we were forced to further restructure certain C-Ray functions to make up for limitations of CUDA architecture. For example, C-Ray creates a linked list of objects when it loads data from the scene file. C-Ray understandably uses a linked list to contain objects because it cannot determine how many elements will be in a scene and thus how much memory to allocate for a flat array prior to reading the scene file. However, as demonstrated in the pseudocode, each host memory allocation containing data which will be used by the kernel must have a corresponding kernel memory allocation. It would be impractical to suffer the overhead of a number of \texttt{cudaMalloc} calls equivalent to the number of objects in a scene, so we implemented a function which would create a flattened array of the host's linked list of objects. This flattened array memory is then copied to its corresponding kernel array in the aforementioned pseudocode. Figure \ref{code:flatten_obj_list} illustrates the function \texttt{flatten\_obj\_list}, which flattens a linked list of objects.
 
 \begin{figure}
     \caption{\texttt{flatten\_obj\_list} implementation} \label{code:flatten_obj_list}
@@ -347,7 +353,7 @@ flatten_obj_list function
 \end{lstlisting}
 \end{figure}
 
-This pseudocode shows that each sphere has a \texttt{not\_null} variable, which is set to true only if a given element of the flattened array contains an object. After each object in the scene has filled the flattened array, the final element of the array does not contain an object and thus sets the \texttt{not\_null} variable to false. This construction was necessary to account for C-Ray’s loops which would continue to run until the linked list of objects pointed to an invalid object.
+This pseudocode shows that each sphere has a \texttt{not\_null} variable, which is set to true only if a given element of the flattened array contains an object. After each object in the scene has filled the flattened array, the final element of the array does not contain an object and thus sets the \texttt{not\_null} variable to false. This construction was necessary to account for C-Ray's loops which would continue to run until the linked list of objects pointed to an invalid object.
 
 Another \textsc{cudatrace} modification included the removal of all C-Ray recursive function calls. This aspect of \textsc{cudatrace} was actually not necessary to successfully compile on the Tesla M2050 GPU, but we began the creation of \textsc{cudatrace} with the prospect of compiling on NVIDIA GPUs with a 1.3 compute capability. GPUs with a 1.3 compute capability restrict any form of recursive function calling, but GPUs with a 2.0 compute capability are free of this restriction. In C-Ray, indirect recursion occurs during the creation of reflection rays, in which the trace function calls the shade function if the ray traces to an object, which then calls the trace function if a reflection ray should be traced. If the current ray being traced hits an object, the reflection depth limits the amount of times reflection rays can be traced. In \textsc{cudatrace}, we prevented reflection rays from being traced until the original trace function had returned. Figure \ref{code:recursion_workaround} demonstrates our recursion workaround.
 
@@ -355,53 +361,42 @@ Another \textsc{cudatrace} modification included the removal of all C-Ray recurs
     \caption{Avoiding recursion in \textsc{cudatrace}} \label{code:recursion_workaround}
 \begin{lstlisting}
 ...
- for each sample
-{      
+ for each sample {      
             call trace function to determine output color(pass in as arguments reflection boolean and reflection ray data container)
 
-            while reflection boolean is true(or while reflection rays should be traced)
-            {
-                
+            while reflection boolean is true(or while reflection rays should be traced) {
                 call trace function to determine reflection color(pass in reflection ray container data as argument)
                 sum up the reflection color and color values
             }
 }
 ...
 
-trace function
-{
+trace function {
     ...  
-    if reflection depth is greater than or equal to the maximum reflection depth 
-    {
+    if reflection depth is greater than or equal to the maximum reflection depth {
         all RGB colors are set to black
         reflection boolean is set to false(no more reflection rays should be traced)
         return color value
     }
    ...
-   if nearest object is a valid object 
-   {
+   if nearest object is a valid object {
         call shade function to determine color(pass in as arguments reflection boolean and reflection ray data container)
    } 
-   else 
-   {
+   else {
         all RGB colors are set to black
         reflection boolean is set to false
    }
    ...
 }
 
-shade function
-{
+shade function {
    ...
-   if object should have a reflection ray 
-   {
-
+   if object should have a reflection ray {
      reflection boolean is set to true(another reflection ray should be traced)
      data is stored in reflection ray data container
      depth in incremented
    }   
-   else 
-   {
+   else {
      reflection boolean is set to false
    }
    ...
@@ -420,7 +415,7 @@ Above that 5.5 megapixel cutoff, however, the data changes drastically, and \tex
 
 %INSERT INITIAL GRAPHS
 
-Due to \textsc{cudatrace}’s impressive performance at high dimensions and the heavy code restructuring necessary to achieve this gain, we believed our initial version of \textsc{cudatrace} tapped much of the possible parallel performance increase available with C-Ray’s program structure. Thus, it seemed unlikely after creating \textsc{cudatrace} that we would be able to obtain another performance increase of a similar magnitude without possibly modifiying the ray-tracing algorithm and the data types used. For the final version of \textsc{cudatrace}, instead of aiming for a drastic modification which would further decrease the time taken to render large scenes, we chose to determine what what causing the bottleneck which prevented \textsc{cudatrace} from being more efficient than C-Ray at lower dimensions.
+Due to \textsc{cudatrace}'s impressive performance at high dimensions and the heavy code restructuring necessary to achieve this gain, we believed our initial version of \textsc{cudatrace} tapped much of the possible parallel performance increase available with C-Ray's program structure. Thus, it seemed unlikely after creating \textsc{cudatrace} that we would be able to obtain another performance increase of a similar magnitude without possibly modifiying the ray-tracing algorithm and the data types used. For the final version of \textsc{cudatrace}, instead of aiming for a drastic modification which would further decrease the time taken to render large scenes, we chose to determine what causing the bottleneck which prevented \textsc{cudatrace} from being more efficient than C-Ray at lower dimensions.
 
 \section{Final Modification}
 As we began the final phase of \textsc{cudatrace} modifications, we sought to improve upon what caused the initial version to run slower than C-Ray at dimensions under $2400 \times 2400$ pixels.  We were aware of three areas in which we could provide improvement. First, we knew that each CUDA API call had a certain overhead associated with it. Further research allowed us to determine that the total program API call overhead was primarily affected by the amount of memory being allocated or transferred in each CUDA API call. We had many unnecessary calls present in our initial modification which were remnants of previous implementations, and we accordingly planned to remove them. Next, we were able to determine using the CUDA profiler that most of the overhead was a result of the \texttt{cudaMemcpy} function which transfers the device output data to the host. In that manner, we sought to either lessen the time of this transfer or determine an alternative method to port the output data into an image file. Finally, we did not have time during the initial modification to record variations in performance in respect to thread and block amounts. We thus attempted to determine what these optimal amounts would be.
@@ -431,13 +426,13 @@ When looking to reduce the overhead of the memory transfer from the device to th
 
 In terms of accelerating transfer time using aspects of the architecture, we discovered a function called \texttt{cudaMallocHost} which perfectly fit our needs. The \texttt{cudaMallocHost} function allocates pinned memory in the host, which means that any memory allocated with this call cannot be overwritten unless the programmer creates code to explicitly do this. It also allows for allocated host memory to be tracked and aligned by the CUDA context, creating greater throughput during transfers of memory between the host and device. However, there is one drawback to \texttt{cudaMallocHost}: it is a magnitude of three to five times slower than malloc. 
 
-At this point, we also considered having each thread write its output to the host after it had finished tracing a ray. Putting aside the complications of determining the appropriate frame buffer index on the host, we found overhead tests of the \texttt{cudaMemcpy} function on 2.0 compute capability cards which demonstrate that it would take more time to transfer data accumulatively in small packets compared to transferring the total amount of data in one run.\footnote{http://www.cs.virginia.edu/\%7Emwb7w/cuda\_support/memory\_transfer\_overhead.html}.
+At this point, we also considered having each thread write its output to the host after it had finished tracing a ray. Putting aside the complications of determining the appropriate frame buffer index on the host, we found overhead tests of the \texttt{cudaMemcpy} function on 2.0 compute capability cards which demonstrate that it would take more time to transfer data accumulatively in small packets compared to transferring the total amount of data in one run.\footnote{\url{http://www.cs.virginia.edu/\%7Emwb7w/cuda\_support/memory\_transfer\_overhead.html}}.
 
-Comparing the program modifications between the initial and final versions of \textsc{cudatrace}, we believe more programming effort was exhausted in our primary restructuring of C-Ray to allow it to be compatible with CUDA’s restrictions. The initial version required us to remove recursive function calls, linked list usage, and modify each function called in the kernel with the appropriate device function headers. In the final version, however, many of the edits involved changing one or very few lines of code. For example, thread and block numbers could be changed by altering the numbers where we input the thread dimensions. The implementation of cudaHostMalloc required a substitution of only one call to malloc with the appropriate CUDA  call. 
+Comparing the program modifications between the initial and final versions of \textsc{cudatrace}, we believe more programming effort was exhausted in our primary restructuring of C-Ray to allow it to be compatible with CUDA's restrictions. The initial version required us to remove recursive function calls, linked list usage, and modify each function called in the kernel with the appropriate device function headers. In the final version, however, many of the edits involved changing one or very few lines of code. For example, thread and block numbers could be changed by altering the numbers where we input the thread dimensions. The implementation of cudaHostMalloc required a substitution of only one call to malloc with the appropriate CUDA  call. 
 
 \section{Performance Evaluation}
 
-In evaluating \textsc{cudatrace}, we hoped to compare the sequential version with the CUDA version for variable block sizes as well as resolutions. To make this possible, we first modified our existing application so that it would accept block dimensions as a command-line argument in addition to output resolution. The end result being that \textsc{cudatrace} can be called with syntax like
+In evaluating \textsc{cudatrace}, we hoped to compare C-Ray with \texttt{cudatrace} for variable block sizes as well as resolutions. To make this possible, we first modified our existing application so that it would accept block dimensions as a command-line argument in addition to output resolution. The end result being that \textsc{cudatrace} can be called with syntax like
             
 \begin{lstlisting}[language=bash]
     ./cudatrace -i scenefile -o scene.ppm -s 800x600 -t 16x16
@@ -449,7 +444,17 @@ With this addition, we were able to use a custom shell script, \texttt{cudatrace
 
 For three runs, this test suite takes roughly three hours, with much of the time spent rendering large images at small block sizes in \textsc{cudatrace} and in C-Ray. Under ideal circumstances, we would have tested both tracers at more image sizes to ensure good data resolution, but for our purposes this was sufficient.
 
-The output of the test script is a comma-separated values (CSV) file with rows containing columns expressing the width and height of the output image, the $x$ and $y$ dimensions of the CUDA blocks, the render time, the real time, the application type (CUDA or sequential), and the run number. The distinction between render time and real time is important. The latter is simply the ``wall time'' for the program's execution: the time is noted at the initial command-line call and after the application returns; the difference between the two times is the real time taken. This includes I/O, CUDA context initialization overhead, and all other delays relevant to the execution of an application. The render time, on the other hand, attempts to prevent some of these factors from playing a role.  In the case of the sequential version of the program, this time is only the time taken to trace all of the rays. Crucially in the CUDA version, render time is simply the time taken to copy the stored scene information to the GPU, trace all necessary rays, and copy the result information back to the host.
+The output of the test script is a comma-separated values (CSV) file with rows containing columns expressing the width and height of the output image, the $x$ and $y$ dimensions of the CUDA blocks, the render time, the real time, the application type (CUDA or sequential), and the run number. The distinction between render time and real time is important. The latter is simply the ``wall time'' for the program's execution: the time is noted at the initial command-line call and after the application returns; the difference between the two times is the real time taken. This includes I/O, CUDA context initialization overhead, and all other delays relevant to the execution of an application. The render time, on the other hand, attempts to prevent some of these factors from playing a role.  In the case of C-Ray, this time is only the time taken to trace all of the rays. Crucially in \texttt{cudatrace}, render time is simply the time taken to copy the stored scene information to the GPU, trace all necessary rays, and copy the result information back to the host.
+
+\begin{figure}
+    \caption{Render Time versus Real Time} \label{fig:render_vs_real}
+    \begin{center}
+<<fig=TRUE,echo=FALSE,width=7.5>>=
+print(render_time_vs_real_time2)
+@
+    \end{center}
+\end{figure}
+
 
 Crucially, the first call to the CUDA API occurs outside of this render time, eliminating from our performance analysis the unavoidable 3.5 second initialization time taken for the CUDA drivers to recognize the presence of a GPU and begin communicating with it. We discovered this quirk when trying to optimize \textsc{cudatrace} at low image resolutions. We found that there seemed to be an asymptotic lower limit to the real time that we were able to achieve around 3.5 seconds. To test if this latency was indeed the result of so-called context initialization, we wrote a small program to simply run \texttt{cudaFree(0)} once on the device and timed it using the same method as we had in our earlier evaluations. We found that this driver call, the only CUDA call in the test program, indeed took roughly 3.5 seconds to run on our test platform. Unfortunately, with the current structure of CUDA architecture, there is no way to initialize the CUDA driver and context before a program runs. The CUDA context normally initializes and is deleted with each CUDA program run. Having thus verified the source of our most significant bottleneck, we focused on optimizing render time and less of an emphasis on real time.
 
@@ -470,16 +475,7 @@ Crucially, the first call to the CUDA API occurs outside of this render time, el
     \end{center}
 \end{table}
 
-\begin{figure}
-    \caption{Render Time versus Real Time} \label{fig:render_vs_real}
-    \begin{center}
-<<fig=TRUE,echo=FALSE,width=7.5>>=
-print(render_time_vs_real_time2)
-@
-    \end{center}
-\end{figure}
-
-We imported our test data into R and added some additional variables. We calculated both real speedup and render speedup as the time the sequential program took divided by the time the parallel version took, for each iteration. We also trivially calculated the total pixels and total threads for each run. We used the ggplot package to provide some interesting visualizations.
+We imported our test data into R and added some additional variables. We calculated both real speedup and render speedup as the time that C-Ray took divided by the time \texttt{cudatrace} took, for each iteration. We also trivially calculated the total pixels and total threads for each run. We used the ggplot package to provide some interesting visualizations.
 
 
 \begin{figure}
@@ -500,6 +496,15 @@ print(render_speedup_vs_megapixels)
     \end{center}
 \end{figure}
 
+On the surface, it is very clear that our parallelized ray tracer performs better than C-Ray. In real time, we were able to realize a maximum speed up of \Sexpr{round(max_real_speedup, digits = 3)} for a $16000\times 16000$ pixel image. When measuring render time, we saw an even more impressive maximum of \Sexpr{round(max_render_speedup, digits = 3)} speedup for a $1280 \times 1280$ pixel image. This does not tell the whole story however. The number of threads per \textsc{cudatrace} execution played a significant role in determining the speedup.
+
+\begin{center}
+<<echo=FALSE,print=FALSE,results=tex>>=
+library(xtable)
+print(xtable(max_speedup_each_res(total_speed), caption = "Maximum Speedup by Resolution", label = "tab:max_speedup_each_res"))
+@
+\end{center}
+
 \begin{figure}
     \caption{Inset---Render Speedup versus Megapixels} \label{fig:render_speedup_zoom}
     \begin{center}
@@ -509,32 +514,37 @@ print(render_speedup_vs_megapixels_zoom)
     \end{center}
 \end{figure}
 
-On the surface, it is very clear that our parallelized ray tracer performs better than the original sequential version of C-Ray. In real time, we were able to realize a maximum speed up of \Sexpr{round(max_real_speedup, digits = 3)} for a $16000\times 16000$ pixel image. When measuring render time, we saw an even more impressive maximum of \Sexpr{round(max_render_speedup, digits = 3)} speedup for a $1280 \times 1280$ pixel image. This does not tell the whole story however. The number of threads per \textsc{cudatrace} execution played a significant role in determining the speedup.
-
-\begin{table}
-    \caption{Maximum Speedup By Resolution} \label{tab:max_speedup_each_res}
-    \begin{center}
-<<echo=FALSE,print=FALSE,results=tex>>=
-library(xtable)
-print(xtable(max_speedup_each_res(total_speed)))
-@
-    \end{center}
-\end{table}
-
 We did not see a real speedup for anything in our test suite below $4800 \times 4800$ pixel images, where we found a maximum real speedup of \Sexpr{round(max_least_real_speedup, digits = 3)}. Above that resolution however, we did see real speedups in all block sizes from 4x4 through $22 \times 22$. The $1 \times 1$ and $2 \times 2$ block sizes fell short of providing us with any improvement, as expected. For render time, we saw speedups in the same range of block sizes, but at a much lower starting resolution. At $240 \times 240$ pixels we saw render speedups ranging from approximately 1.05 for 4x4 threads to near 1.65 for $8 \times 8$ threads and just below that for 16x16 threads. We conclude that the significant difference in the ``break even'' point between real and render time is almost completely the result of the context initialization overhead inherit to CUDA and discussed previously. The less significant difference between the render speedup break even point of approximately $240 \times 240$ pixels can almost certainly be attributed to the overhead of allocating space on the CUDA device for the various components of the scene as well as copying the pixels frame buffer back from the device at the completion of all ray tracing calculations. As discussed earlier in this paper we believe we have reached a plateau in the potential optimizations of this element of the application. Because of this, we now address the render speedup in slightly more detail.
 
 Despite the fact that there was some variation in the number of threads that gave the best performance at various resolutions, there was a clear pattern to the optimized block sizes. Overall, the most efficient number of threads was $16 \times 16 = 256$. This is directly tied to the hardware we did our testing on, the Tesla M2050 GPU. For \textsc{cudatrace} render time, reading and writing to memory are the highest latency operations executed, so the more threads we are able to run in parallel, the better we are able to disguise this latency. The M2050 have a CUDA compute capability of 2.0 and thus a maximum of 48 warps per multiprocessor (MP), eight thread blocks per MP, and 1536 threads per MP. Additionally, there is a physical limit of 32 threads per warp. Thus, for cases where overhead is not dominant, the optimal block size is that which maximizes the occupancy of each multiprocessor, or 1536 threads total.  In our case, this amounts to utilizing $1536/32 = 48$ warps per multiprocessor, the maximum. When we have $16 \times 16 = 256$ threads, we use $256 \times (6 \text{blocks}) = 1536$ active threads per multiprocessor, 100\% of the number of threads allowed on each multiprocessor. On the other hand, when we have $22 \times 22 = 484$ threads, we use $484 \times (3 \text{blocks}) = 1452$ threads per multiprocessor, only 94\% of the maximum number of threads. The maximum number of threads per block on CUDA 2.0 cards is 512. To comply with our use of two dimensional thread blocks, this would require an illegal block size of $22.63 \times 22.63$. Thus, 16x16 is the maximum block size that we can utilize with 100\% multiprocessor occupancy.
 
+\begin{figure}
+    \caption{Inset---Real Time versus Megapixels} \label{fig:real_time_zoom3}
+    \begin{center}
+<<fig=TRUE,echo=FALSE,width=7.5>>=
+print(real_time_zoom3)
+@
+    \end{center}
+\end{figure}
+
 For image resolutions below $2400 \times 2400$, we found that block sizes of 8x8 were actually slightly more efficient than those of 16x16 despite the fact that the former only reaches 33\% occupancy. We attribute this to the added overhead required to create four times as many threads for such a relatively small resolution. Note that the render speedup difference between 8x8 and 16x16 in this range is on the order of magnitude of 0.1. Above $2400 \times 2400$, $16 \times 16$ threads reigns supreme, although a block size of $8 \times 8$ only lags behind by approximately 0.1 with regard to render speedup.
 
-Considering that our greatest barrier toward having \textsc{cudatrace} outpace C-Ray at any given frame dimension was the overhead of context creation, we considered the possibility of sequentially tracing rays for all given dimensions under $2400 \times 2400$ pixels. This could be implemented by importing all of C-Ray’s functions which are involved in ray rendering. The function could then test if the given dimensions are under $2400 \times 2400$ pixels. If under this amount, the host frame buffer would have memory allocated using malloc and each ray would be traced sequentially using C-Ray’s original functions. If above this amount, the host frame buffer would have memory allocated using \texttt{cudaMallocHost}, and a context would be created. All of the required scene information would be have memory allocated in the kernel, and the kernel call would be made, allowing each ray to be traced in parallel. Drawbacks of this implementation include increased program size, increased compile time, and a lack of parallel exploitation as NVIDIA creates cards with decreased CUDA API call and context overhead. 
+\begin{figure}
+    \caption{Inset---Render Time versus Megapixels} \label{fig:render_no_jitter_time_zoom3}
+    \begin{center}
+<<fig=TRUE,echo=FALSE,width=7.5>>=
+print(render_time_no_jitter_zoom3)
+@
+    \end{center}
+\end{figure}
 
+Acknowledging that our greatest barrier toward having \textsc{cudatrace} outpace C-Ray at any given frame dimension was the overhead of context creation, we considered the possibility of sequentially tracing rays for all given dimensions under $2400 \times 2400$ pixels. This could be implemented by importing all of C-Ray's functions which are involved in ray rendering. The function could then test if the given dimensions are under $2400 \times 2400$ pixels. If under this amount, the host frame buffer would have memory allocated using malloc and each ray would be traced sequentially using C-Ray's original functions. If above this amount, the host frame buffer would have memory allocated using \texttt{cudaMallocHost}, and a context would be created. All of the required scene information would be have memory allocated in the kernel, and the kernel call would be made, allowing each ray to be traced in parallel. Drawbacks of this implementation include increased program size, increased compile time, and a lack of parallel exploitation as NVIDIA creates cards with decreased CUDA API call and context overhead. 
 
 \section{Limitations of CUDA and Project Conflicts}
 
-As we searched for methods to improve \textsc{cudatrace}’s performance, we came across a variety of brick walls which were mostly the fault of the GPU hardware. For example, CUDA driver and context initialization overhead time constituted one of our greatest bottlenecks when rendering scenes under $2400 \times 2400$ pixels. 
+As we searched for methods to improve \textsc{cudatrace}'s performance, we came across a variety of brick walls which were mostly the fault of the GPU hardware. For example, CUDA driver and context initialization overhead time constituted one of our greatest bottlenecks when rendering scenes under $2400 \times 2400$ pixels. 
 
-Additionally, both \textsc{cudatrace} and C-Ray fail at very high resolutions (over approximately 600 megapixels) because we attempt to store all of the frame buffer pixels in memory at the same time. It is possible to overcome this by writing to the file in blocks as the rendering occurs, rather than all at once after all rays are traced. However, the accumulated overhead of multiple \texttt{cudaMemcpy} calls would swiftly overtake the overhead of a single \texttt{cudaMemcpy} call which transferred the entirety of the output data to the host frame buffer. Assuming we ignored this drawback, our next hardware-related ceiling is the GPU’s limitation on number of thread blocks allowed in the grid. For modern hardware, this will not quickly become an issue, as CUDA  supports 65,535 times 65,535 = 4,294,836,225 blocks. With our conservative implementation of 256 threads per block, each handling one pixel, we are left with a rough theoretical maximum of 1.09 trillion pixels. 
+Additionally, both \textsc{cudatrace} and C-Ray fail at very high resolutions (over approximately 600 megapixels) because we attempt to store all of the frame buffer pixels in memory at the same time. It is possible to overcome this by writing to the file in blocks as the rendering occurs, rather than all at once after all rays are traced. However, the accumulated overhead of multiple \texttt{cudaMemcpy} calls would swiftly overtake the overhead of a single \texttt{cudaMemcpy} call which transferred the entirety of the output data to the host frame buffer. Assuming we ignored this drawback, our next hardware-related ceiling is the GPU's limitation on number of thread blocks allowed in the grid. For modern hardware, this will not quickly become an issue, as CUDA  supports 65,535 times 65,535 = 4,294,836,225 blocks. With our conservative implementation of 256 threads per block, each handling one pixel, we are left with a rough theoretical maximum of 1.09 trillion pixels. 
 
 The final hardware limitation we noted affects the processing of double-precision variables. The rendering of each ray involves computation on a significant amount of 3-tuple structures. Each element of a 3-tuple is a double.  Using a CUDA 2.0 compute capability GPU, only one double-precision operation can be performed per cycle per core. Thus, our double-precision variables limit the amount of parallelism we are able to exploit.
 
