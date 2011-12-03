@@ -1,6 +1,6 @@
 \contentsline {section}{\numberline {1}Introduction}{3}{section.1}
 \contentsline {section}{\numberline {2}Initial Modification}{6}{section.2}
-\contentsline {section}{\numberline {3}Final Modification}{12}{section.3}
+\contentsline {section}{\numberline {3}Final Modification}{11}{section.3}
 \contentsline {section}{\numberline {4}Performance Evaluation}{13}{section.4}
 \contentsline {section}{\numberline {5}Limitations of CUDA and Project Conflicts}{22}{section.5}
 \contentsline {section}{\numberline {6}Choices and Tradeoffs}{22}{section.6}

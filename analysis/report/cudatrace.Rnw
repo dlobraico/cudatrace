@@ -279,24 +279,6 @@ A significant portion of \textsc{cudatrace}'s primary modifications consisted of
 With these conventions for parallelism in mind, figures \ref{code:c-ray_basic} and \ref{code:cudatrace_basic} compare how C-Ray and \textsc{cudatrace} call the function to initialize ray-tracing and transfer output data into an image file.
 
 \begin{figure}[H]
-    \caption{C-Ray version} \label{code:c-ray_basic}
-\begin{lstlisting}
-...
-allocate host memory for frame buffer array
-
-// begin ray-tracing
-call render function 
-
-
-print image resolution to image file
-
-for each color output/pixel data contained in the frame buffer
-write the RGB values to the image file
-...
-\end{lstlisting}
-\end{figure}
-
-\begin{figure}[H]
     \caption{\textsc{cudatrace} version} \label{code:cudatrace_basic}
 \begin{lstlisting}
 ...
@@ -326,6 +308,24 @@ render1 function
      free all allocated kernel memory
 }  
 
+\end{lstlisting}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{C-Ray version} \label{code:c-ray_basic}
+\begin{lstlisting}
+...
+allocate host memory for frame buffer array
+
+// begin ray-tracing
+call render function 
+
+
+print image resolution to image file
+
+for each color output/pixel data contained in the frame buffer
+write the RGB values to the image file
+...
 \end{lstlisting}
 \end{figure}
 

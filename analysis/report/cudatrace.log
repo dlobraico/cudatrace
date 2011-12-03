@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.1415926-2.3-0.9997.5 (TeX Live 2011) (format=xelatex 2011.7.3)  3 DEC 2011 02:05
+This is XeTeX, Version 3.1415926-2.3-0.9997.5 (TeX Live 2011) (format=xelatex 2011.7.3)  3 DEC 2011 02:10
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1092,10 +1092,10 @@ Missing character: There is no “ in font aer12!
 Missing character: There is no ” in font aer12!
 [3]
 File: cudatrace-002.pdf Graphic file (type QTm)
- <use  "cudatrace-002.pdf" > [4] [5] [6] [7] [8]
+ <use  "cudatrace-002.pdf" > [4] [5] [6] [7]
 Missing character: There is no “ in font aer12!
 Missing character: There is no ” in font aer12!
- [9] [10] [11] [12]
+ [8] [9] [10] [11] [12]
 (/usr/local/texlive/2011/texmf-dist/tex/latex/listings/lstlang1.sty
 File: lstlang1.sty 2004/09/05 1.3 listings language file
 )
@@ -1104,23 +1104,23 @@ File: lstlang1.sty 2004/09/05 1.3 listings language file
 ) [13]
 File: cudatrace-003.pdf Graphic file (type QTm)
 
-<use  "cudatrace-003.pdf" >
+<use  "cudatrace-003.pdf" > [14]
 File: cudatrace-004.pdf Graphic file (type QTm)
  <use  "cudatrace-004.pdf" >
 File: cudatrace-005.pdf Graphic file (type QTm)
 
-<use  "cudatrace-005.pdf" > [14] [15] [16] [17]
+<use  "cudatrace-005.pdf" >
 Overfull \hbox (15.24596pt too wide) in paragraph at lines 331--354
  [] 
  []
 
 File: cudatrace-007.pdf Graphic file (type QTm)
-<use  "cudatrace-007.pdf" > [18] [19]
+<use  "cudatrace-007.pdf" > [15] [16] [17] [18]
 File: cudatrace-008.pdf Graphic file (type QTm)
- <use  "cudatrace-008.pdf" > [20]
+ <use  "cudatrace-008.pdf" >
 File: cudatrace-009.pdf Graphic file (type QTm)
 
-<use  "cudatrace-009.pdf" > [21] [22] [23]
+<use  "cudatrace-009.pdf" > [19] [20] [21] [22] [23]
 Package atveryend Info: Empty hook `BeforeClearDocument' on input line 412.
  [24]
 Package atveryend Info: Empty hook `AfterLastShipout' on input line 412.
@@ -1139,7 +1139,7 @@ Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 412.
 Here is how much of TeX's memory you used:
  20906 strings out of 494150
  333263 string characters out of 3152950
- 563238 words of memory out of 3000000
+ 583966 words of memory out of 3000000
  23801 multiletter control sequences out of 15000+200000
  44349 words of font info for 95 fonts, out of 3000000 for 9000
  1018 hyphenation exceptions out of 8191
