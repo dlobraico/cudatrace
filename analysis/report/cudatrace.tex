@@ -56,7 +56,7 @@
 
 
 \section[Introduction]{Introduction to C-Ray, \textsc{cudatrace}, and the CUDA API}
-\textsc{cudatrace}, which we have created over the course of nine weeks, is the conversion of C-Ray, a sequentially implemented ray-tracer, to the CUDA general purpose graphics processing unit programming paradigm.
+\textsc{cudatrace}\footnote{\url{http://github.com/pygatea/cudatrace}}, which we have created over the course of nine weeks, is the conversion of C-Ray, a sequentially implemented ray-tracer, to the CUDA general purpose graphics processing unit programming paradigm.
 
 Ray-tracing is a computer graphics technique that is very useful for generating images with a high degree of realism. It uses an algorithm to build an image that considers both the view ray of the observer and the shadow ray of the light source on the objects within the scene. Ray-tracing comes at a high computational cost and is usually implemented when the end product can be generated ahead of time. Thus, it is very useful for producing visual effects, such as reflection and dispersion, on still images and film, and it is rarely used in real-time generated images, such as in video games.
 
@@ -66,7 +66,7 @@ We have chosen to use NVIDIA's CUDA GPGPU architecture as a platform for \textsc
 
 Applications written in CUDA execute code in parallel on the graphics processing unit by initializing so-called CUDA kernels.Within each kernel is a one, two, or three dimensional matrix of blocks. Each of those blocks contains a similarly-dimensioned group of threads, each executing the code referenced by the kernel call. When many threads are created in the same block, they execute simultaneously, therein serving as the root of parallelism in CUDA programming.
 
-All of our successful experiments took place on Amazon EC2's GPU cluster instance, which is equipped with two NVIDIA Tesla “Fermi” M2050 GPUs. The M2050 GPU has 448 CUDA cores, 3 GB of GDDR5 memory, 148 GB/second memory bandwidth, and 225W TDP. Because the Tesla M2050 has a compute capability of 2.0, it is capable of running 32  CUDA cores per Streaming Multiprocessor(SM) in parallel. Each SM has a limit of 1536 threads, and the amount of blocks per SM is based on how many threads are in each block.
+All of our successful experiments took place on Amazon EC2's GPU cluster instance, which is equipped with two NVIDIA Tesla “Fermi” M2050 GPUs. The M2050 GPU has 448 CUDA cores, 3 GB of GDDR5 memory, 148 GB/second memory bandwidth, and 225W TDP. Because the Tesla M2050 has a compute capability of 2.0, it is capable of running 32  CUDA cores per Streaming Multiprocessor (SM) in parallel. Each SM has a limit of 1536 threads, and the amount of blocks per SM is based on how many threads are in each block.
 
 In determining a model for parallelism, we used \texttt{gprof} to display the total amount of time taken for each C-Ray function. For every run of \texttt{gprof}, we used a standard pixel benchmarking scene containing only three objects and one light source. Additionally, only one ray would be traced per pixel, not counting reflection rays. Scene dimensions varied among $800\times 800$, $1600 \times 1600$, $2400 \times 2400$, $3200 \times 3200$, $4000 \times 4000$, and $4800 \times 4800$ pixels. Our profiling data allowed us to determine that approximately 70\% of C-Ray's runtime was taken up in the \texttt{ray\_sphere} function. The \texttt{ray\_sphere} function determines whether or not there is a ray-sphere intersection for a given ray. Although this function consumed the most time per program instance, its operations contained little to no parallelism which could be exploited. Instead of finding a minor part inside of the \texttt{ray\_sphere} function which could contain parallelism, we decided to call each \texttt{ray\_sphere} function in parallel. When one ray is being traced, \texttt{ray\_sphere} is called a minimum amount of times as the number of objects in a scene. With this knowledge, we could choose to commence a kernel call each time \texttt{ray\_sphere} is called. This would give us a minimum amount of parallelism proportional to the amount of objects in a scene. However, we could also choose to exploit much greater parallelism by simultaneously running an amount of \texttt{ray\_sphere} functions proportional to the number of pixels in a rendered image. To do this,we would trace each ray for each pixel in a scene in parallel. We predicted that this model would be possible because individual rays share data such as scene primitives and materials, but they never modify this data. Thus, the generation of one ray is not dependent on the generation of another ray, and they can be traced in parallel. While creating this model, we determined that each of our tests would be held on the given benchmark scene in various dimensions, tracing only one ray per pixel. In this manner, our tests would be consistent and easier to read, as they would not take into account the overhead of reading varying amounts data from a scene.
 
@@ -107,7 +107,7 @@ We have implemented \textsc{cudatrace} using NVIDIA's CUDA Developer Toolkit. Th
 \section{Initial Modification}
 A significant portion of \textsc{cudatrace}'s primary modifications consisted of CUDA API function call additions to allocate and transfer memory between the host and device prior to and following the rendering of a scene by means of ray-tracing. A brief description follows of CUDA's conventions for obtaining parallelism and the purpose of CUDA API functions. Before any parallel computation can begin, the kernel must have access to all of the data it will utilize. The kernel does not have access to any malloc-allocated memory in the host, so a specific CUDA API function call must be made to allocate kernel-specific memory, called \texttt{cudaMalloc}. Similarly, cudaFree is used to free any memory allocated with \texttt{cudaMalloc}. This memory still cannot be seen by the kernel until it is passed as an argument into the kernel call. In order to transfer data between host-allocated memory and the kernel-allocated memory, the \texttt{cudaMemcpy} function is used. The first kernel function called must have a \texttt{\_\_global\_\_} prefix added to its definition, and it always takes as an argument the number of threads per block and the number of blocks to be used. Additionally, any functions called within the kernel must have a \texttt{\_\_device\_\_} prefix.    
 
-With these conventions for parallelism in mind, figures \ref{code:c-ray_basic} and \ref{code:cudatrace_basic} compare how C-Ray and \textsc{cudatrace} call the function to initialize ray-tracing and transfer output data into an image file.
+With these conventions for parallelism in mind, figures \ref{code:cudatrace_basic} and \ref{code:c-ray_basic} compare how C-Ray and \textsc{cudatrace} call the function to initialize ray-tracing and transfer output data into an image file.
 
 \begin{figure}[H]
     \caption{\textsc{cudatrace} version} \label{code:cudatrace_basic}
@@ -119,24 +119,23 @@ call render1 function, which allocates and transfers kernel memory for ray-traci
  
 print image resolution to image file
 
-for each color output/pixel data contained in the frame buffer
-write the RGB values to the image file
+for each color output/pixel data contained in the frame buffer {
+    write the RGB values to the image file
 }
 ...
 
-render1 function
-{
-     calculate number of threads per block and number of blocks
-  
-     allocate kernel memory for kernel version of frame buffer, flattened object list, number of objects, camera, lights list    
-    
+render1 function {
+    calculate number of threads per block and number of blocks
+      
+    allocate kernel memory for kernel version of frame buffer, flattened object list, number of objects, camera, lights list    
+        
     transfer host memory to kernel memory for flattened object list, number of objects, camera, lights list
 
-     call the kernel, which begins the ray-tracing (provide arguments including number of blocks, threads per block, and all of the kernel memory previously allocated)
+    call the kernel, which begins the ray-tracing (provide arguments including number of blocks, threads per block, and all of the kernel memory previously allocated)
 
-     copy kernel memory output data from kernel frame buffer to host frame buffer
+    copy kernel memory output data from kernel frame buffer to host frame buffer
 
-     free all allocated kernel memory
+    free all allocated kernel memory
 }  
 
 \end{lstlisting}
@@ -171,11 +170,9 @@ Aside from the modifications made in apparent in \textsc{cudatrace}'s pseudocode
 \begin{figure}
     \caption{\texttt{flatten\_obj\_list} implementation} \label{code:flatten_obj_list}
 \begin{lstlisting}
-flatten_obj_list function
-{
+flatten_obj_list function {
    
-    for each number of objects in the linked list 
-   {
+    for each number of objects in the linked list {
         add the linked list object to the flattened array
         define flattened array element to be not null
     }
@@ -332,11 +329,20 @@ We imported our test data into R and added some additional variables. We calcula
     \end{center}
 \end{figure}
 
-On the surface, it is very clear that our parallelized ray tracer performs better than C-Ray. In real time, we were able to realize a maximum speed up of -Inf for a $16000\times 16000$ pixel image. When measuring render time, we saw an even more impressive maximum of -Inf speedup for a $1280 \times 1280$ pixel image. This does not tell the whole story however. The number of threads per \textsc{cudatrace} execution played a significant role in determining the speedup.
+On the surface, it is very clear that our parallelized ray tracer performs better than C-Ray. In real time, we were able to realize a maximum speed up of 3.644 for a $16000\times 16000$ pixel image. When measuring render time, we saw an even more impressive maximum of 4.96 speedup for a $1280 \times 1280$ pixel image. This does not tell the whole story however. The number of threads per \textsc{cudatrace} execution played a significant role in determining the speedup.
+
+\begin{figure}
+    \caption{Inset---Render Speedup versus Megapixels} \label{fig:render_speedup_zoom}
+    \begin{center}
+\includegraphics{cudatrace-008}
+    \end{center}
+\end{figure}
+
+We did not see a real speedup for anything in our test suite below $4800 \times 4800$ pixel images, where we found a maximum real speedup of 1.977. Above that resolution however, we did see real speedups in all block sizes from 4x4 through $22 \times 22$. The $1 \times 1$ and $2 \times 2$ block sizes fell short of providing us with any improvement, as expected. For render time, we saw speedups in the same range of block sizes, but at a much lower starting resolution. At $240 \times 240$ pixels we saw render speedups ranging from approximately 1.05 for 4x4 threads to near 1.65 for $8 \times 8$ threads and just below that for $16 \times 16$ threads. We conclude that the significant difference in the ``break even'' point between real and render time is almost completely the result of the context initialization overhead inherit to CUDA and discussed previously. The less significant difference between the render speedup break even point of approximately $240 \times 240$ pixels can almost certainly be attributed to the overhead of allocating space on the CUDA device for the various components of the scene as well as copying the pixels frame buffer back from the device at the completion of all ray tracing calculations. As discussed earlier in this paper we believe we have reached a plateau in the potential optimizations of this element of the application. Because of this, we now address the render speedup in slightly more detail.
 
 \begin{center}
 % latex table generated in R 2.14.0 by xtable 1.6-0 package
-% Sat Dec  3 02:32:07 2011
+% Sat Dec  3 02:46:01 2011
 \begin{table}[ht]
 \begin{center}
 \begin{tabular}{rrrrrr}
@@ -367,16 +373,7 @@ On the surface, it is very clear that our parallelized ray tracer performs bette
 \end{center}
 \end{table}\end{center}
 
-\begin{figure}
-    \caption{Inset---Render Speedup versus Megapixels} \label{fig:render_speedup_zoom}
-    \begin{center}
-\includegraphics{cudatrace-009}
-    \end{center}
-\end{figure}
-
-We did not see a real speedup for anything in our test suite below $4800 \times 4800$ pixel images, where we found a maximum real speedup of 1.977. Above that resolution however, we did see real speedups in all block sizes from 4x4 through $22 \times 22$. The $1 \times 1$ and $2 \times 2$ block sizes fell short of providing us with any improvement, as expected. For render time, we saw speedups in the same range of block sizes, but at a much lower starting resolution. At $240 \times 240$ pixels we saw render speedups ranging from approximately 1.05 for 4x4 threads to near 1.65 for $8 \times 8$ threads and just below that for 16x16 threads. We conclude that the significant difference in the ``break even'' point between real and render time is almost completely the result of the context initialization overhead inherit to CUDA and discussed previously. The less significant difference between the render speedup break even point of approximately $240 \times 240$ pixels can almost certainly be attributed to the overhead of allocating space on the CUDA device for the various components of the scene as well as copying the pixels frame buffer back from the device at the completion of all ray tracing calculations. As discussed earlier in this paper we believe we have reached a plateau in the potential optimizations of this element of the application. Because of this, we now address the render speedup in slightly more detail.
-
-Despite the fact that there was some variation in the number of threads that gave the best performance at various resolutions, there was a clear pattern to the optimized block sizes. Overall, the most efficient number of threads was $16 \times 16 = 256$. This is directly tied to the hardware we did our testing on, the Tesla M2050 GPU. For \textsc{cudatrace} render time, reading and writing to memory are the highest latency operations executed, so the more threads we are able to run in parallel, the better we are able to disguise this latency. The M2050 have a CUDA compute capability of 2.0 and thus a maximum of 48 warps per multiprocessor (MP), eight thread blocks per MP, and 1536 threads per MP. Additionally, there is a physical limit of 32 threads per warp. Thus, for cases where overhead is not dominant, the optimal block size is that which maximizes the occupancy of each multiprocessor, or 1536 threads total.  In our case, this amounts to utilizing $1536/32 = 48$ warps per multiprocessor, the maximum. When we have $16 \times 16 = 256$ threads, we use $256 \times (6 \text{blocks}) = 1536$ active threads per multiprocessor, 100\% of the number of threads allowed on each multiprocessor. On the other hand, when we have $22 \times 22 = 484$ threads, we use $484 \times (3 \text{blocks}) = 1452$ threads per multiprocessor, only 94\% of the maximum number of threads. The maximum number of threads per block on CUDA 2.0 cards is 512. To comply with our use of two dimensional thread blocks, this would require an illegal block size of $22.63 \times 22.63$. Thus, 16x16 is the maximum block size that we can utilize with 100\% multiprocessor occupancy.
+Despite the fact that there was some variation in the number of threads that gave the best performance at various resolutions, there was a clear pattern to the optimized block sizes. Overall, the most efficient number of threads was $16 \times 16 = 256$. This is directly tied to the hardware we did our testing on, the Tesla M2050 GPU. For \textsc{cudatrace} render time, reading and writing to memory are the highest latency operations executed, so the more threads we are able to run in parallel, the better we are able to disguise this latency. The M2050 have a CUDA compute capability of 2.0 and thus a maximum of 48 warps per multiprocessor (MP), eight thread blocks per MP, and 1536 threads per MP. Additionally, there is a physical limit of 32 threads per warp. Thus, for cases where overhead is not dominant, the optimal block size is that which maximizes the occupancy of each multiprocessor, or 1536 threads total.  In our case, this amounts to utilizing $1536/32 = 48$ warps per multiprocessor, the maximum. When we have $16 \times 16 = 256$ threads, we use $256 \times (6 \text{blocks}) = 1536$ active threads per multiprocessor, 100\% of the number of threads allowed on each multiprocessor. On the other hand, when we have $22 \times 22 = 484$ threads, we use $484 \times (3 \text{blocks}) = 1452$ threads per multiprocessor, only 94\% of the maximum number of threads. The maximum number of threads per block on CUDA 2.0 cards is 512. To comply with our use of two dimensional thread blocks, this would require an illegal block size of $22.63 \times 22.63$. Thus, $16 \times 16$ is the maximum block size that we can utilize with 100\% multiprocessor occupancy.
 
 \begin{figure}
     \caption{Inset---Real Time versus Megapixels} \label{fig:real_time_zoom3}
@@ -385,7 +382,7 @@ Despite the fact that there was some variation in the number of threads that gav
     \end{center}
 \end{figure}
 
-For image resolutions below $2400 \times 2400$, we found that block sizes of 8x8 were actually slightly more efficient than those of 16x16 despite the fact that the former only reaches 33\% occupancy. We attribute this to the added overhead required to create four times as many threads for such a relatively small resolution. Note that the render speedup difference between 8x8 and 16x16 in this range is on the order of magnitude of 0.1. Above $2400 \times 2400$, $16 \times 16$ threads reigns supreme, although a block size of $8 \times 8$ only lags behind by approximately 0.1 with regard to render speedup.
+For image resolutions below $2400 \times 2400$, we found that block sizes of 8x8 were actually slightly more efficient than those of $16 \times 16$ despite the fact that the former only reaches 33\% occupancy. We attribute this to the added overhead required to create four times as many threads for such a relatively small resolution. Note that the render speedup difference between 8x8 and $16 \times 16$ in this range is on the order of magnitude of 0.1. Above $2400 \times 2400$, $16 \times 16$ threads reigns supreme, although a block size of $8 \times 8$ only lags behind by approximately 0.1 with regard to render speedup.
 
 \begin{figure}
     \caption{Inset---Render Time versus Megapixels} \label{fig:render_no_jitter_time_zoom3}
