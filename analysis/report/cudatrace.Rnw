@@ -40,11 +40,11 @@
 
 \title{cudatrace --- A parallel ray tracer written in CUDA/C}
 \author{Dominick LoBraico and Laura Macaddino}
-\date{\today}
+\date{2011 December 3}
 \maketitle
 
 \begin{abstract}
-    \textsc{cudatrace} is a high performance ray tracer based off of the sequential C-Ray benchmark and written in CUDA/C. While device integration woes and CUDA initialization overhead renders \textsc{cudatrace} slightly slower in wall time than its sequential counterpart for small resolutions, its actual rendering time is significantly faster for resolutions as small as $240 \times 240$ pixels. \textsc{cudatrace} provides some interesting lessons as to the costs and benefits of developing in the emerging field of general purpose graphics processing unit (GPGPU) programming as well as in the more general field of parallel programming.
+    \textsc{cudatrace} is a high performance ray tracer based off of the sequential C-Ray benchmark and written in CUDA/C. While device integration woes and CUDA initialization overhead leave \textsc{cudatrace} slightly slower in wall time than its sequential counterpart for small resolutions, its actual rendering time is significantly faster for resolutions as small as $240 \times 240$ pixels. \textsc{cudatrace} provides some interesting lessons as to the costs and benefits of developing in the emerging field of general purpose graphics processing unit (GPGPU) programming as well as in the more general field of parallel programming.
 \end{abstract}
 
 \pagebreak
